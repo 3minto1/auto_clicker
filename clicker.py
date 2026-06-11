@@ -46,5 +46,17 @@ class Clicker:
                 self.controller.press(self.key)
                 self.controller.release(self.key)
             else:
-                self.controller.click(mouse.Button.left)
+                button = self._get_mouse_button(self.key)
+                self.controller.click(button)
             time.sleep(self.interval / 1000.0)
+    
+    def _get_mouse_button(self, button_name):
+        button_map = {
+            "left": mouse.Button.left,
+            "right": mouse.Button.right,
+            "middle": mouse.Button.middle,
+            "button1": mouse.Button.left,
+            "button2": mouse.Button.right,
+            "button3": mouse.Button.middle,
+        }
+        return button_map.get(button_name.lower(), mouse.Button.left)

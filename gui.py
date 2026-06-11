@@ -80,11 +80,31 @@ class AutoClickerGUI:
     
     def set_key(self):
         self.status_label.config(text="状态: 请按下新按键...")
-        self.root.bind("<KeyPress>", self.on_key_pressed)
+        target = self.target_var.get()
+        if target == "keyboard":
+            self.root.bind("<KeyPress>", self.on_key_pressed)
+        else:
+            self.root.bind("<ButtonPress-1>", self.on_mouse_button_pressed)
+            self.root.bind("<ButtonPress-2>", self.on_mouse_button_pressed)
+            self.root.bind("<ButtonPress-3>", self.on_mouse_button_pressed)
     
     def on_key_pressed(self, event):
         self.key_var.set(event.keysym)
         self.root.unbind("<KeyPress>")
+        self.status_label.config(text="状态: 停止")
+        self.save_config()
+    
+    def on_mouse_button_pressed(self, event):
+        button_map = {
+            1: "left",
+            2: "middle",
+            3: "right"
+        }
+        button_name = button_map.get(event.num, "left")
+        self.key_var.set(button_name)
+        self.root.unbind("<ButtonPress-1>")
+        self.root.unbind("<ButtonPress-2>")
+        self.root.unbind("<ButtonPress-3>")
         self.status_label.config(text="状态: 停止")
         self.save_config()
     
