@@ -3,8 +3,9 @@ import json
 import pytest
 from config_manager import ConfigManager
 
-def test_load_default_config():
-    config_manager = ConfigManager()
+def test_load_default_config(tmp_path):
+    config_file = str(tmp_path / "test_config.json")
+    config_manager = ConfigManager(config_file)
     config = config_manager.load_config()
     assert "hotkey" in config
     assert "mode" in config
