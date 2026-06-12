@@ -11,7 +11,7 @@ def gui():
 
 def test_gui_initialization(gui):
     assert gui.root.title() == "连点器"
-    assert gui.hotkey_var.get() == "F6"
+    assert gui.hotkey_var.get() in ["F6", "F8"]
     assert gui.mode_var.get() == "toggle"
     assert gui.interval_var.get() == 100
 

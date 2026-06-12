@@ -1,17 +1,19 @@
 import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
+from tkinter import filedialog
 import threading
 import pystray
 from PIL import Image, ImageDraw
 from config_manager import ConfigManager
 from hotkey_listener import HotkeyListener
 from clicker import Clicker
+from macro_manager import MacroManager
 
 
 class AutoClickerGUI:
     BASE_WIDTH = 500
-    BASE_HEIGHT = 520
+    BASE_HEIGHT = 620
     BASE_FONT_SIZE = 10
 
     BG_COLOR = "#f0f0f0"
@@ -20,6 +22,8 @@ class AutoClickerGUI:
     STOP_COLOR = "#e74c3c"
     STOP_HOVER = "#c0392b"
     RUNNING_COLOR = "#27ae60"
+    RECORD_COLOR = "#e67e22"
+    RECORD_HOVER = "#d35400"
     CARD_BG = "#ffffff"
     TEXT_COLOR = "#333333"
     LABEL_COLOR = "#555555"
@@ -28,12 +32,13 @@ class AutoClickerGUI:
         self.root = tk.Tk()
         self.root.title("连点器")
         self.root.geometry(f"{self.BASE_WIDTH}x{self.BASE_HEIGHT}")
-        self.root.minsize(320, 280)
+        self.root.minsize(320, 400)
         self.root.configure(bg=self.BG_COLOR)
 
         self.config_manager = ConfigManager()
         self.hotkey_listener = HotkeyListener()
         self.clicker = Clicker()
+        self.macro_manager = MacroManager()
         self._running = False
         self._scale = 1.0
         self._tray_icon = None
@@ -44,9 +49,12 @@ class AutoClickerGUI:
         self.target_var = tk.StringVar(value="keyboard")
         self.key_var = tk.StringVar(value="a")
         self.close_to_tray_var = tk.BooleanVar(value=True)
+        self.macro_status_var = tk.StringVar(value="未录制")
+        self.macro_file_var = tk.StringVar(value="")
 
         self._init_fonts()
         self._init_styles()
+        self._setup_macro_callbacks()
         self.create_widgets()
         self.load_config()
         self._start_hotkey_listener()
@@ -71,6 +79,7 @@ class AutoClickerGUI:
         style.configure("Title.TLabel", background=self.BG_COLOR, foreground=self.TEXT_COLOR, font=self.font_title)
         style.configure("Status.TLabel", background=self.CARD_BG, foreground=self.LABEL_COLOR, font=self.font_status)
         style.configure("Running.TLabel", background=self.CARD_BG, foreground=self.RUNNING_COLOR, font=self.font_status)
+        style.configure("Recording.TLabel", background=self.CARD_BG, foreground=self.RECORD_COLOR, font=self.font_status)
         style.configure("Hint.TLabel", background=self.CARD_BG, foreground="#999999", font=self.font_small)
 
         style.configure("Accent.TButton", font=self.font_button, padding=(12, 6))
@@ -83,6 +92,11 @@ class AutoClickerGUI:
                    background=[("active", self.STOP_HOVER), ("!active", self.STOP_COLOR)],
                    foreground=[("active", "white"), ("!active", "white")])
 
+        style.configure("Record.TButton", font=self.font_button, padding=(12, 6))
+        style.map("Record.TButton",
+                   background=[("active", self.RECORD_HOVER), ("!active", self.RECORD_COLOR)],
+                   foreground=[("active", "white"), ("!active", "white")])
+
         style.configure("Set.TButton", font=self.font_label, padding=(6, 2))
         style.map("Set.TButton",
                    background=[("active", "#e0e0e0"), ("!active", "#e8e8e8")])
@@ -91,6 +105,12 @@ class AutoClickerGUI:
         style.configure("TCombobox", font=self.font_entry, padding=4)
         style.configure("TSpinbox", font=self.font_entry, padding=4)
         style.configure("TCheckbutton", background=self.CARD_BG, foreground=self.TEXT_COLOR)
+
+    def _setup_macro_callbacks(self):
+        self.macro_manager.on_record_start = self._on_macro_record_start
+        self.macro_manager.on_record_stop = self._on_macro_record_stop
+        self.macro_manager.on_play_start = self._on_macro_play_start
+        self.macro_manager.on_play_stop = self._on_macro_play_stop
 
     def _on_resize(self, event):
         if event.widget != self.root:
@@ -110,10 +130,28 @@ class AutoClickerGUI:
 
     def create_widgets(self):
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(1, weight=1)
 
-        header = ttk.Frame(self.root, style="Card.TFrame")
-        header.grid(row=0, column=0, sticky=tk.W + tk.E, padx=12, pady=(12, 0))
+        canvas = tk.Canvas(self.root, bg=self.BG_COLOR, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=canvas.yview)
+        self.scrollable_frame = tk.Frame(canvas, bg=self.BG_COLOR)
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.root.rowconfigure(0, weight=1)
+        self.root.columnconfigure(0, weight=1)
+
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+
+        header = ttk.Frame(self.scrollable_frame, style="Card.TFrame")
+        header.pack(fill=tk.X, padx=12, pady=(12, 0))
         header.columnconfigure(0, weight=1)
 
         ttk.Label(header, text="⚡ 连点器", style="Title.TLabel").grid(row=0, column=0, sticky=tk.W, pady=(0, 2))
@@ -121,14 +159,15 @@ class AutoClickerGUI:
         self.status_label = ttk.Label(header, text="● 已停止", style="Status.TLabel")
         self.status_label.grid(row=1, column=0, sticky=tk.W)
 
-        body = tk.Frame(self.root, bg=self.BG_COLOR)
-        body.grid(row=1, column=0, sticky=tk.W + tk.E + tk.N + tk.S, padx=12, pady=8)
+        body = tk.Frame(self.scrollable_frame, bg=self.BG_COLOR)
+        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
         body.columnconfigure(0, weight=1)
 
         self._create_hotkey_card(body, row=0)
         self._create_settings_card(body, row=1)
-        self._create_behavior_card(body, row=2)
-        self._create_action_card(body, row=3)
+        self._create_macro_card(body, row=2)
+        self._create_behavior_card(body, row=3)
+        self._create_action_card(body, row=4)
 
     def _create_hotkey_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
@@ -175,6 +214,44 @@ class AutoClickerGUI:
         ttk.Label(card, text="毫秒 (1-1000)", style="Hint.TLabel").grid(
             row=3, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
+    def _create_macro_card(self, parent, row):
+        card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
+        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.columnconfigure(1, weight=1)
+
+        ttk.Label(card, text="宏录制/回放", style="Card.TLabel", font=self.font_button).grid(
+            row=0, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(8, 4))
+
+        btn_frame = tk.Frame(card, bg=self.CARD_BG)
+        btn_frame.grid(row=1, column=0, columnspan=3, sticky=tk.W, padx=10, pady=2)
+
+        self.record_button = tk.Button(
+            btn_frame, text="● 录制", font=self.font_button,
+            bg=self.RECORD_COLOR, fg="white", activebackground=self.RECORD_HOVER,
+            activeforeground="white", relief="flat", cursor="hand2",
+            command=self.toggle_recording, width=10
+        )
+        self.record_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.play_button = tk.Button(
+            btn_frame, text="▶ 回放", font=self.font_button,
+            bg=self.ACCENT_COLOR, fg="white", activebackground=self.ACCENT_HOVER,
+            activeforeground="white", relief="flat", cursor="hand2",
+            command=self.toggle_playback, width=10
+        )
+        self.play_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        ttk.Button(btn_frame, text="保存", style="Set.TButton", command=self.save_macro).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(btn_frame, text="加载", style="Set.TButton", command=self.load_macro).pack(side=tk.LEFT)
+
+        ttk.Label(card, text="状态:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Label(card, textvariable=self.macro_status_var, style="Card.TLabel").grid(
+            row=2, column=1, sticky=tk.W, pady=2)
+
+        ttk.Label(card, text="文件:", style="Card.TLabel").grid(row=3, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Label(card, textvariable=self.macro_file_var, style="Hint.TLabel", wraplength=300).grid(
+            row=3, column=1, columnspan=2, sticky=tk.W, pady=(2, 8))
+
     def _create_behavior_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
         card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
@@ -203,6 +280,81 @@ class AutoClickerGUI:
             bg=self.ACCENT_HOVER if not self._running else self.STOP_HOVER))
         self.start_button.bind("<Leave>", lambda e: self.start_button.configure(
             bg=self.ACCENT_COLOR if not self._running else self.STOP_COLOR))
+
+    def toggle_recording(self):
+        if self.macro_manager.is_recording:
+            self.macro_manager.stop_recording()
+        else:
+            if self.macro_manager.is_playing:
+                self.macro_manager.stop_playback()
+            self.macro_manager.start_recording()
+
+    def _on_macro_record_start(self):
+        self.root.after(0, self._update_macro_recording)
+
+    def _on_macro_record_stop(self):
+        self.root.after(0, self._update_macro_recorded)
+
+    def _update_macro_recording(self):
+        self.record_button.configure(text="■ 停止录制", bg=self.STOP_COLOR)
+        self.macro_status_var.set("录制中...")
+        self.status_label.configure(text="● 录制中", style="Recording.TLabel")
+
+    def _update_macro_recorded(self):
+        count = self.macro_manager.get_action_count()
+        duration = self.macro_manager.get_duration()
+        self.record_button.configure(text="● 录制", bg=self.RECORD_COLOR)
+        self.macro_status_var.set(f"已录制 {count} 个操作 ({duration:.1f}秒)")
+        self._update_status_stopped()
+
+    def toggle_playback(self):
+        if self.macro_manager.is_playing:
+            self.macro_manager.stop_playback()
+        else:
+            if self.macro_manager.is_recording:
+                self.macro_manager.stop_recording()
+            self.macro_manager.start_playback()
+
+    def _on_macro_play_start(self):
+        self.root.after(0, self._update_macro_playing)
+
+    def _on_macro_play_stop(self):
+        self.root.after(0, self._update_macro_stopped)
+
+    def _update_macro_playing(self):
+        self.play_button.configure(text="■ 停止回放", bg=self.STOP_COLOR)
+        self.macro_status_var.set("回放中...")
+        self.status_label.configure(text="● 回放中", style="Running.TLabel")
+
+    def _update_macro_stopped(self):
+        self.play_button.configure(text="▶ 回放", bg=self.ACCENT_COLOR)
+        count = self.macro_manager.get_action_count()
+        self.macro_status_var.set(f"回放完成 ({count} 个操作)")
+        self._update_status_stopped()
+
+    def save_macro(self):
+        if not self.macro_manager.recorded_actions:
+            return
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("宏文件", "*.json"), ("所有文件", "*.*")],
+            title="保存宏"
+        )
+        if filepath:
+            self.macro_manager.save_macro(filepath)
+            self.macro_file_var.set(filepath)
+
+    def load_macro(self):
+        filepath = filedialog.askopenfilename(
+            filetypes=[("宏文件", "*.json"), ("所有文件", "*.*")],
+            title="加载宏"
+        )
+        if filepath:
+            self.macro_manager.load_macro(filepath)
+            self.macro_file_var.set(filepath)
+            count = self.macro_manager.get_action_count()
+            duration = self.macro_manager.get_duration()
+            self.macro_status_var.set(f"已加载 {count} 个操作 ({duration:.1f}秒)")
 
     def _on_close_to_tray_changed(self):
         self.save_config()
@@ -339,6 +491,10 @@ class AutoClickerGUI:
         self.hotkey_listener.stop_listening()
         if self._running:
             self.clicker.stop_clicking()
+        if self.macro_manager.is_recording:
+            self.macro_manager.stop_recording()
+        if self.macro_manager.is_playing:
+            self.macro_manager.stop_playback()
         self.root.destroy()
 
     def _minimize_to_tray(self):
