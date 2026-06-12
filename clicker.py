@@ -57,6 +57,10 @@ class Clicker:
         self.is_clicking = False
         self.click_thread = None
         self.controller = None
+        self.click_count = 0
+        self.max_clicks = 0
+        self.on_click = None
+        self.on_max_reached = None
 
     def set_target(self, target):
         if target in ["keyboard", "mouse"]:
@@ -68,6 +72,12 @@ class Clicker:
     def set_interval(self, interval):
         if 1 <= interval <= 1000:
             self.interval = interval
+
+    def set_max_clicks(self, max_clicks):
+        self.max_clicks = max(0, int(max_clicks))
+
+    def reset_counter(self):
+        self.click_count = 0
 
     def start_clicking(self):
         if self.is_clicking:
@@ -102,4 +112,15 @@ class Clicker:
             else:
                 button = self.MOUSE_BUTTON_MAP.get(self.key.lower(), mouse.Button.left)
                 self.controller.click(button)
+
+            self.click_count += 1
+            if self.on_click:
+                self.on_click(self.click_count)
+
+            if self.max_clicks > 0 and self.click_count >= self.max_clicks:
+                self.is_clicking = False
+                if self.on_max_reached:
+                    self.on_max_reached()
+                break
+
             time.sleep(self.interval / 1000.0)
