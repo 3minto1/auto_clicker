@@ -37,8 +37,8 @@ class HotkeyListener:
     def _on_press(self, key):
         if not self.is_listening:
             return
-        key_name = self._get_key_name(key)
-        if key_name == self.current_hotkey:
+        key_name = self._get_key_name(key).lower()
+        if key_name == self.current_hotkey.lower():
             if self.mode == "toggle" and not self._hotkey_pressed:
                 self._hotkey_pressed = True
                 if self.callback:
@@ -51,8 +51,8 @@ class HotkeyListener:
     def _on_release(self, key):
         if not self.is_listening:
             return
-        key_name = self._get_key_name(key)
-        if key_name == self.current_hotkey:
+        key_name = self._get_key_name(key).lower()
+        if key_name == self.current_hotkey.lower():
             self._hotkey_pressed = False
             if self.mode == "hold" and self.callback:
                 self.callback()
