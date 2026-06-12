@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import ttk
 from config_manager import ConfigManager
 from hotkey_listener import HotkeyListener
@@ -6,15 +7,22 @@ from clicker import Clicker
 
 
 class AutoClickerGUI:
+    BASE_WIDTH = 400
+    BASE_HEIGHT = 300
+    BASE_FONT_SIZE = 10
+
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("连点器")
-        self.root.geometry("400x300")
+        self.root.geometry(f"{self.BASE_WIDTH}x{self.BASE_HEIGHT}")
+        self.root.minsize(250, 200)
 
         self.config_manager = ConfigManager()
         self.hotkey_listener = HotkeyListener()
         self.clicker = Clicker()
         self._running = False
+        self._scale = 1.0
+        self._widgets = []
 
         self.hotkey_var = tk.StringVar(value="F6")
         self.mode_var = tk.StringVar(value="toggle")
@@ -22,36 +30,78 @@ class AutoClickerGUI:
         self.target_var = tk.StringVar(value="keyboard")
         self.key_var = tk.StringVar(value="a")
 
+        self._init_fonts()
         self.create_widgets()
         self.load_config()
         self._start_hotkey_listener()
 
+        self.root.bind("<Configure>", self._on_resize)
+
+    def _init_fonts(self):
+        self.default_font = tkfont.nametofont("TkDefaultFont")
+        self.default_font.configure(size=self.BASE_FONT_SIZE)
+        self.entry_font = tkfont.Font(family=self.default_font.cget("family"), size=self.BASE_FONT_SIZE)
+        self.button_font = tkfont.Font(family=self.default_font.cget("family"), size=self.BASE_FONT_SIZE)
+        self.bold_font = tkfont.Font(family=self.default_font.cget("family"), size=self.BASE_FONT_SIZE, weight="bold")
+
+    def _on_resize(self, event):
+        if event.widget != self.root:
+            return
+        new_scale = event.width / self.BASE_WIDTH
+        if abs(new_scale - self._scale) < 0.05:
+            return
+        self._scale = new_scale
+        new_size = max(8, int(self.BASE_FONT_SIZE * self._scale))
+
+        self.default_font.configure(size=new_size)
+        self.entry_font.configure(size=new_size)
+        self.button_font.configure(size=new_size)
+        self.bold_font.configure(size=new_size)
+
+        pad = max(4, int(10 * self._scale))
+        self.main_frame.configure(padding=f"{pad}")
+
     def create_widgets(self):
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.main_frame = ttk.Frame(self.root, padding="10")
+        self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
 
-        ttk.Label(main_frame, text="启动热键:").grid(row=0, column=0, sticky=tk.W)
-        ttk.Entry(main_frame, textvariable=self.hotkey_var, width=10).grid(row=0, column=1, sticky=tk.W)
-        ttk.Button(main_frame, text="设置热键", command=self.set_hotkey).grid(row=0, column=2, sticky=tk.W)
+        rows = [
+            ("启动热键:", self.hotkey_var, "Entry", "设置热键", self.set_hotkey),
+            ("启动模式:", self.mode_var, "Combobox", None, None),
+            ("点击间隔(ms):", self.interval_var, "Spinbox", None, None),
+            ("模拟目标:", self.target_var, "Combobox", None, None),
+            ("模拟按键:", self.key_var, "Entry", "设置按键", self.set_key),
+        ]
 
-        ttk.Label(main_frame, text="启动模式:").grid(row=1, column=0, sticky=tk.W)
-        ttk.Combobox(main_frame, textvariable=self.mode_var, values=["toggle", "hold"], state="readonly").grid(row=1, column=1, sticky=tk.W)
+        for i, (label_text, var, widget_type, btn_text, btn_cmd) in enumerate(rows):
+            lbl = ttk.Label(self.main_frame, text=label_text, font=self.default_font)
+            lbl.grid(row=i, column=0, sticky=tk.W, pady=2)
+            self._widgets.append(lbl)
 
-        ttk.Label(main_frame, text="点击间隔(ms):").grid(row=2, column=0, sticky=tk.W)
-        ttk.Spinbox(main_frame, from_=1, to=1000, textvariable=self.interval_var, width=10).grid(row=2, column=1, sticky=tk.W)
+            if widget_type == "Entry":
+                w = ttk.Entry(self.main_frame, textvariable=var, width=12, font=self.entry_font)
+            elif widget_type == "Combobox":
+                values = ["toggle", "hold"] if label_text == "启动模式:" else ["keyboard", "mouse"]
+                w = ttk.Combobox(self.main_frame, textvariable=var, values=values, state="readonly", font=self.entry_font)
+            elif widget_type == "Spinbox":
+                w = ttk.Spinbox(self.main_frame, from_=1, to=1000, textvariable=var, width=12, font=self.entry_font)
+            w.grid(row=i, column=1, sticky=tk.W, pady=2)
+            self._widgets.append(w)
 
-        ttk.Label(main_frame, text="模拟目标:").grid(row=3, column=0, sticky=tk.W)
-        ttk.Combobox(main_frame, textvariable=self.target_var, values=["keyboard", "mouse"], state="readonly").grid(row=3, column=1, sticky=tk.W)
+            if btn_text:
+                btn = ttk.Button(self.main_frame, text=btn_text, command=btn_cmd)
+                btn.grid(row=i, column=2, sticky=tk.W, padx=(5, 0), pady=2)
+                self._widgets.append(btn)
 
-        ttk.Label(main_frame, text="模拟按键:").grid(row=4, column=0, sticky=tk.W)
-        ttk.Entry(main_frame, textvariable=self.key_var, width=10).grid(row=4, column=1, sticky=tk.W)
-        ttk.Button(main_frame, text="设置按键", command=self.set_key).grid(row=4, column=2, sticky=tk.W)
+        self.start_button = ttk.Button(self.main_frame, text="开始", command=self.toggle_clicking)
+        self.start_button.grid(row=5, column=0, columnspan=3, sticky=tk.W + tk.E, pady=(8, 2))
+        self._widgets.append(self.start_button)
 
-        self.start_button = ttk.Button(main_frame, text="开始", command=self.toggle_clicking)
-        self.start_button.grid(row=5, column=0, columnspan=2, sticky=tk.W + tk.E)
-
-        self.status_label = ttk.Label(main_frame, text="状态: 停止")
-        self.status_label.grid(row=6, column=0, columnspan=2, sticky=tk.W)
+        self.status_label = ttk.Label(self.main_frame, text="状态: 停止", font=self.bold_font)
+        self.status_label.grid(row=6, column=0, columnspan=3, sticky=tk.W, pady=2)
+        self._widgets.append(self.status_label)
 
     def load_config(self):
         config = self.config_manager.load_config()
