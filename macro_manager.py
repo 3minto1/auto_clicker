@@ -70,8 +70,23 @@ class MacroManager:
             except Exception:
                 pass
             self._mouse_listener = None
+
+        self._remove_stop_action()
+
         if self.on_record_stop:
             self.on_record_stop()
+
+    def _remove_stop_action(self):
+        if not self.recorded_actions:
+            return
+        while self.recorded_actions:
+            last_action = self.recorded_actions[-1]
+            if last_action["type"] in ["mouse_press", "mouse_release", "key_press", "key_release"]:
+                self.recorded_actions.pop()
+                if last_action["type"] == "mouse_release":
+                    break
+            else:
+                break
 
     def start_playback(self, actions=None):
         if self.is_playing or self.is_recording:
