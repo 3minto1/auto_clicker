@@ -59,8 +59,11 @@ class Clicker:
         self.controller = None
         self.click_count = 0
         self.max_clicks = 0
+        self.max_seconds = 0
+        self._start_time = 0
         self.on_click = None
         self.on_max_reached = None
+        self.on_timeout = None
 
     def set_target(self, target):
         if target in ["keyboard", "mouse"]:
@@ -76,14 +79,23 @@ class Clicker:
     def set_max_clicks(self, max_clicks):
         self.max_clicks = max(0, int(max_clicks))
 
+    def set_max_seconds(self, max_seconds):
+        self.max_seconds = max(0, int(max_seconds))
+
     def reset_counter(self):
         self.click_count = 0
+
+    def get_elapsed_time(self):
+        if self._start_time > 0:
+            return time.time() - self._start_time
+        return 0
 
     def start_clicking(self):
         if self.is_clicking:
             return
 
         self.is_clicking = True
+        self._start_time = time.time()
         if self.target == "keyboard":
             self.controller = keyboard.Controller()
         else:
@@ -122,5 +134,13 @@ class Clicker:
                 if self.on_max_reached:
                     self.on_max_reached()
                 break
+
+            if self.max_seconds > 0:
+                elapsed = time.time() - self._start_time
+                if elapsed >= self.max_seconds:
+                    self.is_clicking = False
+                    if self.on_timeout:
+                        self.on_timeout()
+                    break
 
             time.sleep(self.interval / 1000.0)

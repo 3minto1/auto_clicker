@@ -13,7 +13,7 @@ from macro_manager import MacroManager
 
 class AutoClickerGUI:
     BASE_WIDTH = 500
-    BASE_HEIGHT = 680
+    BASE_HEIGHT = 740
     BASE_FONT_SIZE = 10
 
     BG_COLOR = "#f0f0f0"
@@ -42,6 +42,7 @@ class AutoClickerGUI:
         self._running = False
         self._scale = 1.0
         self._tray_icon = None
+        self._timer_job = None
 
         self.hotkey_var = tk.StringVar(value="F6")
         self.mode_var = tk.StringVar(value="toggle")
@@ -53,6 +54,8 @@ class AutoClickerGUI:
         self.macro_file_var = tk.StringVar(value="")
         self.max_clicks_var = tk.IntVar(value=0)
         self.click_count_var = tk.StringVar(value="0")
+        self.max_seconds_var = tk.IntVar(value=0)
+        self.elapsed_time_var = tk.StringVar(value="00:00")
 
         self._init_fonts()
         self._init_styles()
@@ -118,21 +121,45 @@ class AutoClickerGUI:
     def _setup_clicker_callbacks(self):
         self.clicker.on_click = self._on_click
         self.clicker.on_max_reached = self._on_max_reached
+        self.clicker.on_timeout = self._on_timeout
 
     def _on_click(self, count):
         self.root.after(0, lambda: self.click_count_var.set(str(count)))
 
     def _on_max_reached(self):
-        self.root.after(0, self._handle_max_reached)
+        self.root.after(0, self._handle_stop)
 
-    def _handle_max_reached(self):
+    def _on_timeout(self):
+        self.root.after(0, self._handle_stop)
+
+    def _handle_stop(self):
         self._running = False
+        self._stop_timer()
         self.start_button.configure(text="▶  开始", bg=self.ACCENT_COLOR)
         self.start_button.unbind("<Enter>")
         self.start_button.unbind("<Leave>")
         self.start_button.bind("<Enter>", lambda e: self.start_button.configure(bg=self.ACCENT_HOVER))
         self.start_button.bind("<Leave>", lambda e: self.start_button.configure(bg=self.ACCENT_COLOR))
         self._update_status_stopped()
+
+    def _start_timer(self):
+        if self._timer_job:
+            self.root.after_cancel(self._timer_job)
+        self._update_elapsed_time()
+
+    def _stop_timer(self):
+        if self._timer_job:
+            self.root.after_cancel(self._timer_job)
+            self._timer_job = None
+
+    def _update_elapsed_time(self):
+        if not self._running:
+            return
+        elapsed = self.clicker.get_elapsed_time()
+        minutes = int(elapsed) // 60
+        seconds = int(elapsed) % 60
+        self.elapsed_time_var.set(f"{minutes:02d}:{seconds:02d}")
+        self._timer_job = self.root.after(1000, self._update_elapsed_time)
 
     def _on_resize(self, event):
         if event.widget != self.root:
@@ -188,9 +215,10 @@ class AutoClickerGUI:
         self._create_hotkey_card(body, row=0)
         self._create_settings_card(body, row=1)
         self._create_counter_card(body, row=2)
-        self._create_macro_card(body, row=3)
-        self._create_behavior_card(body, row=4)
-        self._create_action_card(body, row=5)
+        self._create_timer_card(body, row=3)
+        self._create_macro_card(body, row=4)
+        self._create_behavior_card(body, row=5)
+        self._create_action_card(body, row=6)
 
     def _create_hotkey_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
@@ -256,6 +284,24 @@ class AutoClickerGUI:
         ttk.Spinbox(card, from_=0, to=999999, textvariable=self.max_clicks_var, width=10).grid(
             row=2, column=1, sticky=tk.W, pady=2)
         ttk.Label(card, text="0 = 无限", style="Hint.TLabel").grid(
+            row=2, column=2, sticky=tk.W, padx=(6, 10), pady=(2, 8))
+
+    def _create_timer_card(self, parent, row):
+        card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
+        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.columnconfigure(1, weight=1)
+
+        ttk.Label(card, text="定时停止", style="Card.TLabel", font=self.font_button).grid(
+            row=0, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(8, 4))
+
+        ttk.Label(card, text="已运行:", style="Card.TLabel").grid(row=1, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Label(card, textvariable=self.elapsed_time_var, style="Card.TLabel",
+                  font=self.font_button).grid(row=1, column=1, sticky=tk.W, pady=2)
+
+        ttk.Label(card, text="最大时长:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Spinbox(card, from_=0, to=86400, textvariable=self.max_seconds_var, width=10).grid(
+            row=2, column=1, sticky=tk.W, pady=2)
+        ttk.Label(card, text="秒 (0 = 无限)", style="Hint.TLabel").grid(
             row=2, column=2, sticky=tk.W, padx=(6, 10), pady=(2, 8))
 
     def _create_macro_card(self, parent, row):
@@ -416,6 +462,7 @@ class AutoClickerGUI:
         self.key_var.set(config.get("key", "a"))
         self.close_to_tray_var.set(config.get("close_to_tray", True))
         self.max_clicks_var.set(config.get("max_clicks", 0))
+        self.max_seconds_var.set(config.get("max_seconds", 0))
 
     def save_config(self):
         config = {
@@ -425,7 +472,8 @@ class AutoClickerGUI:
             "target": self.target_var.get(),
             "key": self.key_var.get(),
             "close_to_tray": self.close_to_tray_var.get(),
-            "max_clicks": self.max_clicks_var.get()
+            "max_clicks": self.max_clicks_var.get(),
+            "max_seconds": self.max_seconds_var.get()
         }
         self.config_manager.save_config(config)
 
@@ -490,6 +538,7 @@ class AutoClickerGUI:
         if self._running:
             self.clicker.stop_clicking()
             self._running = False
+            self._stop_timer()
             self.start_button.configure(text="▶  开始", bg=self.ACCENT_COLOR)
             self.start_button.unbind("<Enter>")
             self.start_button.unbind("<Leave>")
@@ -504,6 +553,7 @@ class AutoClickerGUI:
             self.clicker.set_key(self.key_var.get())
             self.clicker.set_interval(self.interval_var.get())
             self.clicker.set_max_clicks(self.max_clicks_var.get())
+            self.clicker.set_max_seconds(self.max_seconds_var.get())
             self.clicker.start_clicking()
             self._running = True
             self.start_button.configure(text="■  停止", bg=self.STOP_COLOR)
@@ -512,6 +562,7 @@ class AutoClickerGUI:
             self.start_button.bind("<Enter>", lambda e: self.start_button.configure(bg=self.STOP_HOVER))
             self.start_button.bind("<Leave>", lambda e: self.start_button.configure(bg=self.STOP_COLOR))
             self._update_status_running()
+            self._start_timer()
 
     def _create_tray_icon(self):
         image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
@@ -546,6 +597,7 @@ class AutoClickerGUI:
             self.macro_manager.stop_recording()
         if self.macro_manager.is_playing:
             self.macro_manager.stop_playback()
+        self._stop_timer()
         self.root.destroy()
 
     def _minimize_to_tray(self):
