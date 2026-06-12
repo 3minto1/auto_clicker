@@ -10,13 +10,17 @@ class ConfigManager:
             "mode": "toggle",
             "interval": 100,
             "target": "keyboard",
-            "key": "a"
+            "key": "a",
+            "close_to_tray": True
         }
 
     def load_config(self):
         if os.path.exists(self.config_file):
             with open(self.config_file, 'r') as f:
-                return json.load(f)
+                config = json.load(f)
+                for k, v in self.default_config.items():
+                    config.setdefault(k, v)
+                return config
         return self.default_config.copy()
 
     def save_config(self, config):

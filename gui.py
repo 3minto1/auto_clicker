@@ -1,6 +1,9 @@
 import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
+import threading
+import pystray
+from PIL import Image, ImageDraw
 from config_manager import ConfigManager
 from hotkey_listener import HotkeyListener
 from clicker import Clicker
@@ -8,7 +11,7 @@ from clicker import Clicker
 
 class AutoClickerGUI:
     BASE_WIDTH = 500
-    BASE_HEIGHT = 420
+    BASE_HEIGHT = 460
     BASE_FONT_SIZE = 10
 
     BG_COLOR = "#f0f0f0"
@@ -33,12 +36,14 @@ class AutoClickerGUI:
         self.clicker = Clicker()
         self._running = False
         self._scale = 1.0
+        self._tray_icon = None
 
         self.hotkey_var = tk.StringVar(value="F6")
         self.mode_var = tk.StringVar(value="toggle")
         self.interval_var = tk.IntVar(value=100)
         self.target_var = tk.StringVar(value="keyboard")
         self.key_var = tk.StringVar(value="a")
+        self.close_to_tray_var = tk.BooleanVar(value=True)
 
         self._init_fonts()
         self._init_styles()
@@ -85,6 +90,7 @@ class AutoClickerGUI:
         style.configure("TEntry", font=self.font_entry, padding=4)
         style.configure("TCombobox", font=self.font_entry, padding=4)
         style.configure("TSpinbox", font=self.font_entry, padding=4)
+        style.configure("TCheckbutton", background=self.CARD_BG, foreground=self.TEXT_COLOR)
 
     def _on_resize(self, event):
         if event.widget != self.root:
@@ -121,7 +127,8 @@ class AutoClickerGUI:
 
         self._create_hotkey_card(body, row=0)
         self._create_settings_card(body, row=1)
-        self._create_action_card(body, row=2)
+        self._create_behavior_card(body, row=2)
+        self._create_action_card(body, row=3)
 
     def _create_hotkey_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
@@ -168,6 +175,18 @@ class AutoClickerGUI:
         ttk.Label(card, text="毫秒 (1-1000)", style="Hint.TLabel").grid(
             row=3, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
+    def _create_behavior_card(self, parent, row):
+        card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
+        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+
+        ttk.Label(card, text="关闭行为", style="Card.TLabel", font=self.font_button).grid(
+            row=0, column=0, sticky=tk.W, padx=10, pady=(8, 4))
+
+        check = ttk.Checkbutton(card, text="关闭窗口时最小化到系统托盘（后台运行）",
+                                variable=self.close_to_tray_var, style="TCheckbutton",
+                                command=self._on_close_to_tray_changed)
+        check.grid(row=1, column=0, sticky=tk.W, padx=10, pady=(0, 8))
+
     def _create_action_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
         card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 4))
@@ -185,6 +204,9 @@ class AutoClickerGUI:
         self.start_button.bind("<Leave>", lambda e: self.start_button.configure(
             bg=self.ACCENT_COLOR if not self._running else self.STOP_COLOR))
 
+    def _on_close_to_tray_changed(self):
+        self.save_config()
+
     def load_config(self):
         config = self.config_manager.load_config()
         self.hotkey_var.set(config.get("hotkey", "F6"))
@@ -192,6 +214,7 @@ class AutoClickerGUI:
         self.interval_var.set(config.get("interval", 100))
         self.target_var.set(config.get("target", "keyboard"))
         self.key_var.set(config.get("key", "a"))
+        self.close_to_tray_var.set(config.get("close_to_tray", True))
 
     def save_config(self):
         config = {
@@ -199,7 +222,8 @@ class AutoClickerGUI:
             "mode": self.mode_var.get(),
             "interval": self.interval_var.get(),
             "target": self.target_var.get(),
-            "key": self.key_var.get()
+            "key": self.key_var.get(),
+            "close_to_tray": self.close_to_tray_var.get()
         }
         self.config_manager.save_config(config)
 
@@ -286,12 +310,59 @@ class AutoClickerGUI:
             self.start_button.bind("<Leave>", lambda e: self.start_button.configure(bg=self.STOP_COLOR))
             self._update_status_running()
 
+    def _create_tray_icon(self):
+        image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        color = self.RUNNING_COLOR if self._running else "#4a90d9"
+        draw.ellipse([8, 8, 56, 56], fill=color, outline="white", width=3)
+        draw.text((22, 18), "⚡", fill="white")
+        return image
+
+    def _show_window(self, icon=None, item=None):
+        if icon:
+            icon.stop()
+            self._tray_icon = None
+        self.root.after(0, self._do_show_window)
+
+    def _do_show_window(self):
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+
+    def _quit_program(self, icon=None, item=None):
+        if icon:
+            icon.stop()
+            self._tray_icon = None
+        self.root.after(0, self._do_quit)
+
+    def _do_quit(self):
+        self.hotkey_listener.stop_listening()
+        if self._running:
+            self.clicker.stop_clicking()
+        self.root.destroy()
+
+    def _minimize_to_tray(self):
+        self.save_config()
+        menu = pystray.Menu(
+            pystray.MenuItem("显示窗口", self._show_window, default=True),
+            pystray.MenuItem("退出", self._quit_program)
+        )
+        self._tray_icon = pystray.Icon(
+            "连点器",
+            self._create_tray_icon(),
+            "连点器 - 后台运行中",
+            menu
+        )
+        self.root.withdraw()
+        tray_thread = threading.Thread(target=self._tray_icon.run, daemon=True)
+        tray_thread.start()
+
     def run(self):
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.mainloop()
 
     def _on_close(self):
-        self.hotkey_listener.stop_listening()
-        if self._running:
-            self.clicker.stop_clicking()
-        self.root.destroy()
+        if self.close_to_tray_var.get():
+            self._minimize_to_tray()
+        else:
+            self._do_quit()
