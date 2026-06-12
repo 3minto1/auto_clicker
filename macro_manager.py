@@ -9,7 +9,7 @@ class MacroManager:
         self.is_recording = False
         self.is_playing = False
         self.recorded_actions = []
-        self._start_time = 0
+        self._last_event_time = 0
         self._keyboard_listener = None
         self._mouse_listener = None
         self._play_thread = None
@@ -23,22 +23,31 @@ class MacroManager:
         if self.is_recording or self.is_playing:
             return
         self.recorded_actions = []
-        self._start_time = time.time()
+        self._last_event_time = time.time()
         self.is_recording = True
 
-        self._keyboard_listener = keyboard.Listener(
-            on_press=self._on_key_press,
-            on_release=self._on_key_release
-        )
-        self._keyboard_listener.daemon = True
-        self._keyboard_listener.start()
+        try:
+            self._keyboard_listener = keyboard.Listener(
+                on_press=self._on_key_press,
+                on_release=self._on_key_release
+            )
+            self._keyboard_listener.daemon = True
+            self._keyboard_listener.start()
+        except Exception:
+            pass
 
-        self._mouse_listener = mouse.Listener(
-            on_click=self._on_mouse_click,
-            on_scroll=self._on_mouse_scroll
-        )
-        self._mouse_listener.daemon = True
-        self._mouse_listener.start()
+        try:
+            self._mouse_listener = mouse.Listener(
+                on_move=self._on_mouse_move,
+                on_click=self._on_mouse_click,
+                on_scroll=self._on_mouse_scroll
+            )
+            self._mouse_listener.daemon = True
+            self._mouse_listener.start()
+        except Exception:
+            pass
+
+        time.sleep(0.1)
 
         if self.on_record_start:
             self.on_record_start()
@@ -47,11 +56,18 @@ class MacroManager:
         if not self.is_recording:
             return
         self.is_recording = False
+        time.sleep(0.05)
         if self._keyboard_listener:
-            self._keyboard_listener.stop()
+            try:
+                self._keyboard_listener.stop()
+            except Exception:
+                pass
             self._keyboard_listener = None
         if self._mouse_listener:
-            self._mouse_listener.stop()
+            try:
+                self._mouse_listener.stop()
+            except Exception:
+                pass
             self._mouse_listener = None
         if self.on_record_stop:
             self.on_record_stop()
@@ -66,8 +82,7 @@ class MacroManager:
 
         self.is_playing = True
         self._stop_event.clear()
-        self._play_thread = threading.Thread(target=self._play_loop, args=(actions,))
-        self._play_thread.daemon = True
+        self._play_thread = threading.Thread(target=self._play_loop, args=(actions,), daemon=True)
         self._play_thread.start()
 
         if self.on_play_start:
@@ -91,40 +106,94 @@ class MacroManager:
 
             delay = action.get("delay", 0)
             if delay > 0:
-                time.sleep(delay)
+                time.sleep(min(delay, 5.0))
 
             action_type = action["type"]
-            name = action.get("name", "")
-            button = action.get("button", "")
-            x = action.get("x", 0)
-            y = action.get("y", 0)
 
             try:
                 if action_type == "key_press":
-                    kb_controller.press(name)
+                    name = action.get("name", "")
+                    key = self._resolve_key(name)
+                    kb_controller.press(key)
                 elif action_type == "key_release":
-                    kb_controller.release(name)
+                    name = action.get("name", "")
+                    key = self._resolve_key(name)
+                    kb_controller.release(key)
                 elif action_type == "mouse_click":
+                    x = action.get("x", 0)
+                    y = action.get("y", 0)
+                    button_name = action.get("button", "left")
                     ms_controller.position = (x, y)
-                    btn = self._get_mouse_button(button)
+                    time.sleep(0.01)
+                    btn = self._get_mouse_button(button_name)
                     ms_controller.click(btn)
                 elif action_type == "mouse_press":
+                    x = action.get("x", 0)
+                    y = action.get("y", 0)
+                    button_name = action.get("button", "left")
                     ms_controller.position = (x, y)
-                    btn = self._get_mouse_button(button)
+                    time.sleep(0.01)
+                    btn = self._get_mouse_button(button_name)
                     ms_controller.press(btn)
                 elif action_type == "mouse_release":
+                    x = action.get("x", 0)
+                    y = action.get("y", 0)
+                    button_name = action.get("button", "left")
                     ms_controller.position = (x, y)
-                    btn = self._get_mouse_button(button)
+                    time.sleep(0.01)
+                    btn = self._get_mouse_button(button_name)
                     ms_controller.release(btn)
                 elif action_type == "mouse_scroll":
+                    x = action.get("x", 0)
+                    y = action.get("y", 0)
+                    dy = action.get("dy", 0)
                     ms_controller.position = (x, y)
-                    ms_controller.scroll(0, action.get("dy", 0))
+                    time.sleep(0.01)
+                    ms_controller.scroll(0, dy)
             except Exception:
                 pass
 
         self.is_playing = False
         if self.on_play_stop:
             self.on_play_stop()
+
+    def _resolve_key(self, name):
+        key_map = {
+            "shift": keyboard.Key.shift,
+            "shift_l": keyboard.Key.shift_l,
+            "shift_r": keyboard.Key.shift_r,
+            "ctrl": keyboard.Key.ctrl,
+            "ctrl_l": keyboard.Key.ctrl_l,
+            "ctrl_r": keyboard.Key.ctrl_r,
+            "alt": keyboard.Key.alt,
+            "alt_l": keyboard.Key.alt_l,
+            "alt_r": keyboard.Key.alt_r,
+            "space": keyboard.Key.space,
+            "enter": keyboard.Key.enter,
+            "tab": keyboard.Key.tab,
+            "backspace": keyboard.Key.backspace,
+            "delete": keyboard.Key.delete,
+            "esc": keyboard.Key.esc,
+            "up": keyboard.Key.up,
+            "down": keyboard.Key.down,
+            "left": keyboard.Key.left,
+            "right": keyboard.Key.right,
+            "home": keyboard.Key.home,
+            "end": keyboard.Key.end,
+            "page_up": keyboard.Key.page_up,
+            "page_down": keyboard.Key.page_down,
+            "caps_lock": keyboard.Key.caps_lock,
+            "f1": keyboard.Key.f1, "f2": keyboard.Key.f2,
+            "f3": keyboard.Key.f3, "f4": keyboard.Key.f4,
+            "f5": keyboard.Key.f5, "f6": keyboard.Key.f6,
+            "f7": keyboard.Key.f7, "f8": keyboard.Key.f8,
+            "f9": keyboard.Key.f9, "f10": keyboard.Key.f10,
+            "f11": keyboard.Key.f11, "f12": keyboard.Key.f12,
+        }
+        name_lower = name.lower()
+        if name_lower in key_map:
+            return key_map[name_lower]
+        return name
 
     def _get_mouse_button(self, name):
         button_map = {
@@ -134,12 +203,23 @@ class MacroManager:
         }
         return button_map.get(name, mouse.Button.left)
 
+    def _get_key_name(self, key):
+        try:
+            if hasattr(key, 'name'):
+                return key.name
+            if hasattr(key, 'char') and key.char:
+                return key.char
+            return str(key)
+        except Exception:
+            return str(key)
+
     def _on_key_press(self, key):
         if not self.is_recording:
             return
-        delay = time.time() - self._start_time
-        self._start_time = time.time()
-        name = key.name if hasattr(key, 'name') else (key.char if hasattr(key, 'char') and key.char else str(key))
+        now = time.time()
+        delay = now - self._last_event_time
+        self._last_event_time = now
+        name = self._get_key_name(key)
         self.recorded_actions.append({
             "type": "key_press",
             "name": name,
@@ -149,20 +229,25 @@ class MacroManager:
     def _on_key_release(self, key):
         if not self.is_recording:
             return
-        delay = time.time() - self._start_time
-        self._start_time = time.time()
-        name = key.name if hasattr(key, 'name') else (key.char if hasattr(key, 'char') and key.char else str(key))
+        now = time.time()
+        delay = now - self._last_event_time
+        self._last_event_time = now
+        name = self._get_key_name(key)
         self.recorded_actions.append({
             "type": "key_release",
             "name": name,
             "delay": delay
         })
 
+    def _on_mouse_move(self, x, y):
+        pass
+
     def _on_mouse_click(self, x, y, button, pressed):
         if not self.is_recording:
             return
-        delay = time.time() - self._start_time
-        self._start_time = time.time()
+        now = time.time()
+        delay = now - self._last_event_time
+        self._last_event_time = now
         action_type = "mouse_press" if pressed else "mouse_release"
         button_name = "left" if button == mouse.Button.left else ("right" if button == mouse.Button.right else "middle")
         self.recorded_actions.append({
@@ -176,8 +261,9 @@ class MacroManager:
     def _on_mouse_scroll(self, x, y, dx, dy):
         if not self.is_recording:
             return
-        delay = time.time() - self._start_time
-        self._start_time = time.time()
+        now = time.time()
+        delay = now - self._last_event_time
+        self._last_event_time = now
         self.recorded_actions.append({
             "type": "mouse_scroll",
             "x": x,
