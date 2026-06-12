@@ -128,6 +128,7 @@ class AutoClickerGUI:
         self.clicker.on_click = self._on_click
         self.clicker.on_max_reached = self._on_max_reached
         self.clicker.on_timeout = self._on_timeout
+        self.clicker.on_error = self._on_clicker_error
 
     def _on_click(self, count):
         self.root.after(0, lambda: self.click_count_var.set(str(count)))
@@ -137,6 +138,13 @@ class AutoClickerGUI:
 
     def _on_timeout(self):
         self.root.after(0, self._handle_stop)
+
+    def _on_clicker_error(self, message):
+        self.root.after(0, lambda: self._handle_clicker_error(message))
+
+    def _handle_clicker_error(self, message):
+        self._handle_stop()
+        self.status_label.configure(text=f"● 输入失败: {message}", style="Status.TLabel")
 
     def _handle_stop(self):
         self._running = False
