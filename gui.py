@@ -13,8 +13,8 @@ from preset_manager import PresetManager
 
 
 class AutoClickerGUI:
-    BASE_WIDTH = 500
-    BASE_HEIGHT = 740
+    BASE_WIDTH = 600
+    BASE_HEIGHT = 500
     BASE_FONT_SIZE = 10
 
     BG_COLOR = "#f0f0f0"
@@ -33,7 +33,7 @@ class AutoClickerGUI:
         self.root = tk.Tk()
         self.root.title("连点器")
         self.root.geometry(f"{self.BASE_WIDTH}x{self.BASE_HEIGHT}")
-        self.root.minsize(320, 400)
+        self.root.minsize(500, 400)
         self.root.configure(bg=self.BG_COLOR)
 
         self.config_manager = ConfigManager()
@@ -184,101 +184,68 @@ class AutoClickerGUI:
         self.font_small.configure(size=max(8, sz - 1))
 
     def create_widgets(self):
-        self.root.columnconfigure(0, weight=1)
+        header = tk.Frame(self.root, bg=self.BG_COLOR)
+        header.pack(fill=tk.X, padx=12, pady=(10, 5))
 
-        canvas = tk.Canvas(self.root, bg=self.BG_COLOR, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=canvas.yview)
-        self.scrollable_frame = tk.Frame(canvas, bg=self.BG_COLOR)
-
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.grid(row=0, column=0, sticky="nsew")
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        self.root.rowconfigure(0, weight=1)
-        self.root.columnconfigure(0, weight=1)
-
-        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
-
-        header = ttk.Frame(self.scrollable_frame, style="Card.TFrame")
-        header.pack(fill=tk.X, padx=12, pady=(12, 0))
-        header.columnconfigure(0, weight=1)
-
-        ttk.Label(header, text="⚡ 连点器", style="Title.TLabel").grid(row=0, column=0, sticky=tk.W, pady=(0, 2))
-
+        ttk.Label(header, text="⚡ 连点器", style="Title.TLabel").pack(side=tk.LEFT)
         self.status_label = ttk.Label(header, text="● 已停止", style="Status.TLabel")
-        self.status_label.grid(row=1, column=0, sticky=tk.W)
+        self.status_label.pack(side=tk.LEFT, padx=(15, 0))
 
-        body = tk.Frame(self.scrollable_frame, bg=self.BG_COLOR)
-        body.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
-        body.columnconfigure(0, weight=1)
+        main_frame = tk.Frame(self.root, bg=self.BG_COLOR)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 10))
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(0, weight=1)
+        main_frame.rowconfigure(1, weight=1)
 
-        self._create_preset_card(body, row=0)
-        self._create_hotkey_card(body, row=1)
-        self._create_settings_card(body, row=2)
-        self._create_counter_card(body, row=3)
-        self._create_timer_card(body, row=4)
-        self._create_macro_card(body, row=5)
-        self._create_behavior_card(body, row=6)
-        self._create_action_card(body, row=7)
+        left_frame = tk.Frame(main_frame, bg=self.BG_COLOR)
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 6), pady=(0, 6))
+        left_frame.columnconfigure(0, weight=1)
 
-    def _create_preset_card(self, parent, row):
-        card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
-        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
-        card.columnconfigure(1, weight=1)
+        right_frame = tk.Frame(main_frame, bg=self.BG_COLOR)
+        right_frame.grid(row=0, column=1, sticky="nsew", padx=(6, 0), pady=(0, 6))
+        right_frame.columnconfigure(0, weight=1)
 
-        ttk.Label(card, text="配置预设", style="Card.TLabel", font=self.font_button).grid(
-            row=0, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(8, 4))
+        self._create_hotkey_card(left_frame, row=0)
+        self._create_settings_card(left_frame, row=1)
+        self._create_counter_card(left_frame, row=2)
 
-        ttk.Label(card, text="预设:", style="Card.TLabel").grid(row=1, column=0, sticky=tk.W, padx=(10, 4), pady=2)
-        self.preset_combo = ttk.Combobox(card, textvariable=self.selected_preset_var,
-                                         values=self.preset_manager.get_preset_names(),
-                                         width=15)
-        self.preset_combo.grid(row=1, column=1, sticky=tk.W, pady=2)
+        self._create_preset_card(right_frame, row=0)
+        self._create_timer_card(right_frame, row=1)
+        self._create_macro_card(right_frame, row=2)
 
-        btn_frame = tk.Frame(card, bg=self.CARD_BG)
-        btn_frame.grid(row=1, column=2, sticky=tk.W, padx=(6, 10), pady=2)
+        bottom_frame = tk.Frame(self.root, bg=self.BG_COLOR)
+        bottom_frame.pack(fill=tk.X, padx=12, pady=(0, 10))
+        bottom_frame.columnconfigure(0, weight=1)
+        bottom_frame.columnconfigure(1, weight=1)
 
-        ttk.Button(btn_frame, text="加载", style="Set.TButton", command=self.load_preset).pack(side=tk.LEFT, padx=(0, 3))
-        ttk.Button(btn_frame, text="删除", style="Set.TButton", command=self.delete_preset).pack(side=tk.LEFT)
-
-        ttk.Label(card, text="名称:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
-        ttk.Entry(card, textvariable=self.preset_name_var, width=15).grid(row=2, column=1, sticky=tk.W, pady=2)
-        ttk.Button(card, text="保存", style="Set.TButton", command=self.save_preset).grid(
-            row=2, column=2, sticky=tk.W, padx=(6, 10), pady=2)
-
-        ttk.Label(card, text="快速切换配置方案", style="Hint.TLabel").grid(
-            row=3, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(0, 8))
+        self._create_behavior_card(bottom_frame, col=0)
+        self._create_action_card(bottom_frame, col=1)
 
     def _create_hotkey_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
-        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.grid(row=row, column=0, sticky="nsew", pady=(0, 6))
         card.columnconfigure(1, weight=1)
 
         ttk.Label(card, text="启动热键", style="Card.TLabel", font=self.font_button).grid(
             row=0, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(8, 4))
 
         ttk.Label(card, text="按键:", style="Card.TLabel").grid(row=1, column=0, sticky=tk.W, padx=(10, 4), pady=2)
-        self.hotkey_entry = ttk.Entry(card, textvariable=self.hotkey_var, width=12, justify="center")
+        self.hotkey_entry = ttk.Entry(card, textvariable=self.hotkey_var, width=10, justify="center")
         self.hotkey_entry.grid(row=1, column=1, sticky=tk.W, pady=2)
         ttk.Button(card, text="设置", style="Set.TButton", command=self.set_hotkey).grid(
             row=1, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
         ttk.Label(card, text="模式:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
         ttk.Combobox(card, textvariable=self.mode_var, values=["toggle", "hold"],
-                     state="readonly", width=10).grid(row=2, column=1, sticky=tk.W, pady=2)
+                     state="readonly", width=8).grid(row=2, column=1, sticky=tk.W, pady=2)
 
-        ttk.Label(card, text="点按切换 / 长按生效", style="Hint.TLabel").grid(
-            row=3, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(0, 8))
+        ttk.Label(card, text="点按/长按", style="Hint.TLabel").grid(
+            row=2, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
     def _create_settings_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
-        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.grid(row=row, column=0, sticky="nsew", pady=(0, 6))
         card.columnconfigure(1, weight=1)
 
         ttk.Label(card, text="模拟设置", style="Card.TLabel", font=self.font_button).grid(
@@ -286,30 +253,30 @@ class AutoClickerGUI:
 
         ttk.Label(card, text="目标:", style="Card.TLabel").grid(row=1, column=0, sticky=tk.W, padx=(10, 4), pady=2)
         ttk.Combobox(card, textvariable=self.target_var, values=["keyboard", "mouse"],
-                     state="readonly", width=10).grid(row=1, column=1, sticky=tk.W, pady=2)
+                     state="readonly", width=8).grid(row=1, column=1, sticky=tk.W, pady=2)
 
         ttk.Label(card, text="按键:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
-        self.key_entry = ttk.Entry(card, textvariable=self.key_var, width=12, justify="center")
+        self.key_entry = ttk.Entry(card, textvariable=self.key_var, width=10, justify="center")
         self.key_entry.grid(row=2, column=1, sticky=tk.W, pady=2)
         ttk.Button(card, text="设置", style="Set.TButton", command=self.set_key).grid(
             row=2, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
         ttk.Label(card, text="间隔:", style="Card.TLabel").grid(row=3, column=0, sticky=tk.W, padx=(10, 4), pady=2)
-        ttk.Spinbox(card, from_=1, to=1000, textvariable=self.interval_var, width=10).grid(
+        ttk.Spinbox(card, from_=1, to=1000, textvariable=self.interval_var, width=8).grid(
             row=3, column=1, sticky=tk.W, pady=2)
-        ttk.Label(card, text="毫秒 (1-1000)", style="Hint.TLabel").grid(
+        ttk.Label(card, text="ms", style="Hint.TLabel").grid(
             row=3, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
         ttk.Checkbutton(card, text="随机间隔", variable=self.random_enabled_var,
                         style="TCheckbutton").grid(row=4, column=0, sticky=tk.W, padx=(10, 4), pady=2)
-        ttk.Spinbox(card, from_=0, to=500, textvariable=self.random_range_var, width=10).grid(
+        ttk.Spinbox(card, from_=0, to=500, textvariable=self.random_range_var, width=8).grid(
             row=4, column=1, sticky=tk.W, pady=2)
-        ttk.Label(card, text="±毫秒 (0-500)", style="Hint.TLabel").grid(
+        ttk.Label(card, text="±ms", style="Hint.TLabel").grid(
             row=4, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
     def _create_counter_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
-        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.grid(row=row, column=0, sticky="nsew")
         card.columnconfigure(1, weight=1)
 
         ttk.Label(card, text="点击计数", style="Card.TLabel", font=self.font_button).grid(
@@ -318,19 +285,44 @@ class AutoClickerGUI:
         ttk.Label(card, text="已点击:", style="Card.TLabel").grid(row=1, column=0, sticky=tk.W, padx=(10, 4), pady=2)
         ttk.Label(card, textvariable=self.click_count_var, style="Card.TLabel",
                   font=self.font_button).grid(row=1, column=1, sticky=tk.W, pady=2)
-
         ttk.Button(card, text="重置", style="Set.TButton", command=self.reset_counter).grid(
             row=1, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
         ttk.Label(card, text="最大次数:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
-        ttk.Spinbox(card, from_=0, to=999999, textvariable=self.max_clicks_var, width=10).grid(
+        ttk.Spinbox(card, from_=0, to=999999, textvariable=self.max_clicks_var, width=8).grid(
             row=2, column=1, sticky=tk.W, pady=2)
-        ttk.Label(card, text="0 = 无限", style="Hint.TLabel").grid(
+        ttk.Label(card, text="0=无限", style="Hint.TLabel").grid(
             row=2, column=2, sticky=tk.W, padx=(6, 10), pady=(2, 8))
+
+    def _create_preset_card(self, parent, row):
+        card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
+        card.grid(row=row, column=0, sticky="nsew", pady=(0, 6))
+        card.columnconfigure(1, weight=1)
+
+        ttk.Label(card, text="配置预设", style="Card.TLabel", font=self.font_button).grid(
+            row=0, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(8, 4))
+
+        ttk.Label(card, text="预设:", style="Card.TLabel").grid(row=1, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        self.preset_combo = ttk.Combobox(card, textvariable=self.selected_preset_var,
+                                         values=self.preset_manager.get_preset_names(), width=10)
+        self.preset_combo.grid(row=1, column=1, sticky=tk.W, pady=2)
+
+        btn_frame = tk.Frame(card, bg=self.CARD_BG)
+        btn_frame.grid(row=1, column=2, sticky=tk.W, padx=(6, 10), pady=2)
+        ttk.Button(btn_frame, text="加载", style="Set.TButton", command=self.load_preset).pack(side=tk.LEFT, padx=(0, 3))
+        ttk.Button(btn_frame, text="删除", style="Set.TButton", command=self.delete_preset).pack(side=tk.LEFT)
+
+        ttk.Label(card, text="名称:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Entry(card, textvariable=self.preset_name_var, width=10).grid(row=2, column=1, sticky=tk.W, pady=2)
+        ttk.Button(card, text="保存", style="Set.TButton", command=self.save_preset).grid(
+            row=2, column=2, sticky=tk.W, padx=(6, 10), pady=2)
+
+        ttk.Label(card, text="快速切换配置", style="Hint.TLabel").grid(
+            row=3, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(0, 8))
 
     def _create_timer_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
-        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.grid(row=row, column=0, sticky="nsew", pady=(0, 6))
         card.columnconfigure(1, weight=1)
 
         ttk.Label(card, text="定时停止", style="Card.TLabel", font=self.font_button).grid(
@@ -341,14 +333,14 @@ class AutoClickerGUI:
                   font=self.font_button).grid(row=1, column=1, sticky=tk.W, pady=2)
 
         ttk.Label(card, text="最大时长:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
-        ttk.Spinbox(card, from_=0, to=86400, textvariable=self.max_seconds_var, width=10).grid(
+        ttk.Spinbox(card, from_=0, to=86400, textvariable=self.max_seconds_var, width=8).grid(
             row=2, column=1, sticky=tk.W, pady=2)
-        ttk.Label(card, text="秒 (0 = 无限)", style="Hint.TLabel").grid(
+        ttk.Label(card, text="秒 0=无限", style="Hint.TLabel").grid(
             row=2, column=2, sticky=tk.W, padx=(6, 10), pady=(2, 8))
 
     def _create_macro_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
-        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.grid(row=row, column=0, sticky="nsew")
         card.columnconfigure(1, weight=1)
 
         ttk.Label(card, text="宏录制/回放", style="Card.TLabel", font=self.font_button).grid(
@@ -361,7 +353,7 @@ class AutoClickerGUI:
             btn_frame, text="● 录制", font=self.font_button,
             bg=self.RECORD_COLOR, fg="white", activebackground=self.RECORD_HOVER,
             activeforeground="white", relief="flat", cursor="hand2",
-            command=self.toggle_recording, width=10
+            command=self.toggle_recording, width=8
         )
         self.record_button.pack(side=tk.LEFT, padx=(0, 5))
 
@@ -369,36 +361,36 @@ class AutoClickerGUI:
             btn_frame, text="▶ 回放", font=self.font_button,
             bg=self.ACCENT_COLOR, fg="white", activebackground=self.ACCENT_HOVER,
             activeforeground="white", relief="flat", cursor="hand2",
-            command=self.toggle_playback, width=10
+            command=self.toggle_playback, width=8
         )
         self.play_button.pack(side=tk.LEFT, padx=(0, 5))
 
-        ttk.Button(btn_frame, text="保存", style="Set.TButton", command=self.save_macro).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(btn_frame, text="保存", style="Set.TButton", command=self.save_macro).pack(side=tk.LEFT, padx=(0, 3))
         ttk.Button(btn_frame, text="加载", style="Set.TButton", command=self.load_macro).pack(side=tk.LEFT)
 
         ttk.Label(card, text="状态:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
         ttk.Label(card, textvariable=self.macro_status_var, style="Card.TLabel").grid(
-            row=2, column=1, sticky=tk.W, pady=2)
+            row=2, column=1, columnspan=2, sticky=tk.W, pady=2)
 
         ttk.Label(card, text="文件:", style="Card.TLabel").grid(row=3, column=0, sticky=tk.W, padx=(10, 4), pady=2)
-        ttk.Label(card, textvariable=self.macro_file_var, style="Hint.TLabel", wraplength=300).grid(
+        ttk.Label(card, textvariable=self.macro_file_var, style="Hint.TLabel", wraplength=200).grid(
             row=3, column=1, columnspan=2, sticky=tk.W, pady=(2, 8))
 
-    def _create_behavior_card(self, parent, row):
+    def _create_behavior_card(self, parent, col):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
-        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.grid(row=0, column=col, sticky="nsew", padx=(0, 6))
 
         ttk.Label(card, text="关闭行为", style="Card.TLabel", font=self.font_button).grid(
             row=0, column=0, sticky=tk.W, padx=10, pady=(8, 4))
 
-        check = ttk.Checkbutton(card, text="关闭窗口时最小化到系统托盘（后台运行）",
+        check = ttk.Checkbutton(card, text="最小化到托盘",
                                 variable=self.close_to_tray_var, style="TCheckbutton",
                                 command=self._on_close_to_tray_changed)
         check.grid(row=1, column=0, sticky=tk.W, padx=10, pady=(0, 8))
 
-    def _create_action_card(self, parent, row):
+    def _create_action_card(self, parent, col):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
-        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 4))
+        card.grid(row=0, column=col, sticky="nsew", padx=(6, 0))
         card.columnconfigure(0, weight=1)
 
         self.start_button = tk.Button(
@@ -407,7 +399,7 @@ class AutoClickerGUI:
             activeforeground="white", relief="flat", cursor="hand2",
             command=self.toggle_clicking, height=2
         )
-        self.start_button.grid(row=0, column=0, sticky=tk.W + tk.E, padx=10, pady=10)
+        self.start_button.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         self.start_button.bind("<Enter>", lambda e: self.start_button.configure(
             bg=self.ACCENT_HOVER if not self._running else self.STOP_HOVER))
         self.start_button.bind("<Leave>", lambda e: self.start_button.configure(
