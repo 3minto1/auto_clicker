@@ -3,6 +3,8 @@ import random
 import threading
 from pynput import keyboard, mouse
 
+from windows_input import IS_WINDOWS, WindowsInput
+
 
 class Clicker:
     MODIFIER_MAP = {
@@ -67,6 +69,7 @@ class Clicker:
         self.on_click = None
         self.on_max_reached = None
         self.on_timeout = None
+        self.on_error = None
 
     def set_target(self, target):
         if target in ["keyboard", "mouse"]:
@@ -103,18 +106,21 @@ class Clicker:
 
         self.is_clicking = True
         self._start_time = time.time()
-        if self.target == "keyboard":
+        if IS_WINDOWS:
+            self.controller = WindowsInput()
+        elif self.target == "keyboard":
             self.controller = keyboard.Controller()
         else:
             self.controller = mouse.Controller()
 
-        self.click_thread = threading.Thread(target=self._click_loop)
+        self.click_thread = threading.Thread(target=self._click_loop, daemon=True)
         self.click_thread.start()
 
     def stop_clicking(self):
         self.is_clicking = False
-        if self.click_thread:
+        if self.click_thread and self.click_thread is not threading.current_thread():
             self.click_thread.join()
+        self.click_thread = None
 
     def _resolve_key(self, key_name):
         key_lower = key_name.lower()
@@ -129,15 +135,51 @@ class Clicker:
             return max(1, sleep_time) / 1000.0
         return self.interval / 1000.0
 
+    def _get_press_time(self):
+        return min(0.01, max(0.001, self.interval / 2000.0))
+
+    def _emit_once(self):
+        press_time = self._get_press_time()
+        if IS_WINDOWS:
+            if self.target == "keyboard":
+                self.controller.key_down(self.key)
+                try:
+                    time.sleep(press_time)
+                finally:
+                    self.controller.key_up(self.key)
+            else:
+                self.controller.mouse_down(self.key)
+                try:
+                    time.sleep(press_time)
+                finally:
+                    self.controller.mouse_up(self.key)
+            return press_time
+
+        if self.target == "keyboard":
+            key = self._resolve_key(self.key)
+            self.controller.press(key)
+            try:
+                time.sleep(press_time)
+            finally:
+                self.controller.release(key)
+        else:
+            button = self.MOUSE_BUTTON_MAP.get(self.key.lower(), mouse.Button.left)
+            self.controller.press(button)
+            try:
+                time.sleep(press_time)
+            finally:
+                self.controller.release(button)
+        return press_time
+
     def _click_loop(self):
         while self.is_clicking:
-            if self.target == "keyboard":
-                key = self._resolve_key(self.key)
-                self.controller.press(key)
-                self.controller.release(key)
-            else:
-                button = self.MOUSE_BUTTON_MAP.get(self.key.lower(), mouse.Button.left)
-                self.controller.click(button)
+            try:
+                press_time = self._emit_once()
+            except Exception as exc:
+                self.is_clicking = False
+                if self.on_error:
+                    self.on_error(str(exc))
+                break
 
             self.click_count += 1
             if self.on_click:
@@ -157,4 +199,4 @@ class Clicker:
                         self.on_timeout()
                     break
 
-            time.sleep(self._get_sleep_time())
+            time.sleep(max(0, self._get_sleep_time() - press_time))

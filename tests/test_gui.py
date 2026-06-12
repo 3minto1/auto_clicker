@@ -32,12 +32,19 @@ def test_gui_save_config(gui):
 
 
 def test_gui_toggle_clicking(gui):
+    original_on_click = gui.clicker.on_click
+    gui.clicker.on_click = None
     assert gui._running is False
-    gui.toggle_clicking()
-    assert gui._running is True
-    assert "停止" in gui.start_button.cget("text")
-    assert "运行中" in gui.status_label.cget("text")
-    gui.toggle_clicking()
-    assert gui._running is False
-    assert "开始" in gui.start_button.cget("text")
-    assert "停止" in gui.status_label.cget("text")
+    try:
+        gui.toggle_clicking()
+        assert gui._running is True
+        assert "停止" in gui.start_button.cget("text")
+        assert "运行中" in gui.status_label.cget("text")
+        gui.toggle_clicking()
+        assert gui._running is False
+        assert "开始" in gui.start_button.cget("text")
+        assert "停止" in gui.status_label.cget("text")
+    finally:
+        if gui._running:
+            gui.toggle_clicking()
+        gui.clicker.on_click = original_on_click
