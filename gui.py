@@ -13,8 +13,8 @@ from preset_manager import PresetManager
 
 
 class AutoClickerGUI:
-    BASE_WIDTH = 600
-    BASE_HEIGHT = 500
+    BASE_WIDTH = 680
+    BASE_HEIGHT = 520
     BASE_FONT_SIZE = 10
 
     BG_COLOR = "#f0f0f0"
