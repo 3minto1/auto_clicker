@@ -7,8 +7,8 @@ from clicker import Clicker
 
 
 class AutoClickerGUI:
-    BASE_WIDTH = 420
-    BASE_HEIGHT = 340
+    BASE_WIDTH = 500
+    BASE_HEIGHT = 420
     BASE_FONT_SIZE = 10
 
     BG_COLOR = "#f0f0f0"
