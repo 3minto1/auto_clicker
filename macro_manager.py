@@ -1,6 +1,7 @@
 import json
 import time
 import threading
+import ctypes
 from pynput import keyboard, mouse
 
 
@@ -38,7 +39,6 @@ class MacroManager:
 
         try:
             self._mouse_listener = mouse.Listener(
-                on_move=self._on_mouse_move,
                 on_click=self._on_mouse_click,
                 on_scroll=self._on_mouse_scroll
             )
@@ -96,6 +96,13 @@ class MacroManager:
         if self.on_play_stop:
             self.on_play_stop()
 
+    def _move_mouse_win32(self, x, y):
+        try:
+            ctypes.windll.user32.SetCursorPos(int(x), int(y))
+            time.sleep(0.02)
+        except Exception:
+            pass
+
     def _play_loop(self, actions):
         kb_controller = keyboard.Controller()
         ms_controller = mouse.Controller()
@@ -123,32 +130,28 @@ class MacroManager:
                     x = action.get("x", 0)
                     y = action.get("y", 0)
                     button_name = action.get("button", "left")
-                    ms_controller.position = (x, y)
-                    time.sleep(0.01)
+                    self._move_mouse_win32(x, y)
                     btn = self._get_mouse_button(button_name)
                     ms_controller.click(btn)
                 elif action_type == "mouse_press":
                     x = action.get("x", 0)
                     y = action.get("y", 0)
                     button_name = action.get("button", "left")
-                    ms_controller.position = (x, y)
-                    time.sleep(0.01)
+                    self._move_mouse_win32(x, y)
                     btn = self._get_mouse_button(button_name)
                     ms_controller.press(btn)
                 elif action_type == "mouse_release":
                     x = action.get("x", 0)
                     y = action.get("y", 0)
                     button_name = action.get("button", "left")
-                    ms_controller.position = (x, y)
-                    time.sleep(0.01)
+                    self._move_mouse_win32(x, y)
                     btn = self._get_mouse_button(button_name)
                     ms_controller.release(btn)
                 elif action_type == "mouse_scroll":
                     x = action.get("x", 0)
                     y = action.get("y", 0)
                     dy = action.get("dy", 0)
-                    ms_controller.position = (x, y)
-                    time.sleep(0.01)
+                    self._move_mouse_win32(x, y)
                     ms_controller.scroll(0, dy)
             except Exception:
                 pass
@@ -213,6 +216,12 @@ class MacroManager:
         except Exception:
             return str(key)
 
+    def _get_mouse_position(self):
+        try:
+            return mouse.Controller().position
+        except Exception:
+            return (0, 0)
+
     def _on_key_press(self, key):
         if not self.is_recording:
             return
@@ -238,9 +247,6 @@ class MacroManager:
             "name": name,
             "delay": delay
         })
-
-    def _on_mouse_move(self, x, y):
-        pass
 
     def _on_mouse_click(self, x, y, button, pressed):
         if not self.is_recording:
