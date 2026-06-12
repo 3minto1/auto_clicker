@@ -11,7 +11,7 @@ from clicker import Clicker
 
 class AutoClickerGUI:
     BASE_WIDTH = 500
-    BASE_HEIGHT = 460
+    BASE_HEIGHT = 520
     BASE_FONT_SIZE = 10
 
     BG_COLOR = "#f0f0f0"
