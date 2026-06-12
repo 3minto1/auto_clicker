@@ -9,6 +9,7 @@ from config_manager import ConfigManager
 from hotkey_listener import HotkeyListener
 from clicker import Clicker
 from macro_manager import MacroManager
+from preset_manager import PresetManager
 
 
 class AutoClickerGUI:
@@ -39,6 +40,7 @@ class AutoClickerGUI:
         self.hotkey_listener = HotkeyListener()
         self.clicker = Clicker()
         self.macro_manager = MacroManager()
+        self.preset_manager = PresetManager()
         self._running = False
         self._scale = 1.0
         self._tray_icon = None
@@ -58,6 +60,8 @@ class AutoClickerGUI:
         self.elapsed_time_var = tk.StringVar(value="00:00")
         self.random_enabled_var = tk.BooleanVar(value=False)
         self.random_range_var = tk.IntVar(value=50)
+        self.preset_name_var = tk.StringVar(value="")
+        self.selected_preset_var = tk.StringVar(value="")
 
         self._init_fonts()
         self._init_styles()
@@ -214,13 +218,42 @@ class AutoClickerGUI:
         body.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
         body.columnconfigure(0, weight=1)
 
-        self._create_hotkey_card(body, row=0)
-        self._create_settings_card(body, row=1)
-        self._create_counter_card(body, row=2)
-        self._create_timer_card(body, row=3)
-        self._create_macro_card(body, row=4)
-        self._create_behavior_card(body, row=5)
-        self._create_action_card(body, row=6)
+        self._create_preset_card(body, row=0)
+        self._create_hotkey_card(body, row=1)
+        self._create_settings_card(body, row=2)
+        self._create_counter_card(body, row=3)
+        self._create_timer_card(body, row=4)
+        self._create_macro_card(body, row=5)
+        self._create_behavior_card(body, row=6)
+        self._create_action_card(body, row=7)
+
+    def _create_preset_card(self, parent, row):
+        card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
+        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.columnconfigure(1, weight=1)
+
+        ttk.Label(card, text="配置预设", style="Card.TLabel", font=self.font_button).grid(
+            row=0, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(8, 4))
+
+        ttk.Label(card, text="预设:", style="Card.TLabel").grid(row=1, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        self.preset_combo = ttk.Combobox(card, textvariable=self.selected_preset_var,
+                                         values=self.preset_manager.get_preset_names(),
+                                         width=15)
+        self.preset_combo.grid(row=1, column=1, sticky=tk.W, pady=2)
+
+        btn_frame = tk.Frame(card, bg=self.CARD_BG)
+        btn_frame.grid(row=1, column=2, sticky=tk.W, padx=(6, 10), pady=2)
+
+        ttk.Button(btn_frame, text="加载", style="Set.TButton", command=self.load_preset).pack(side=tk.LEFT, padx=(0, 3))
+        ttk.Button(btn_frame, text="删除", style="Set.TButton", command=self.delete_preset).pack(side=tk.LEFT)
+
+        ttk.Label(card, text="名称:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Entry(card, textvariable=self.preset_name_var, width=15).grid(row=2, column=1, sticky=tk.W, pady=2)
+        ttk.Button(card, text="保存", style="Set.TButton", command=self.save_preset).grid(
+            row=2, column=2, sticky=tk.W, padx=(6, 10), pady=2)
+
+        ttk.Label(card, text="快速切换配置方案", style="Hint.TLabel").grid(
+            row=3, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(0, 8))
 
     def _create_hotkey_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
@@ -461,6 +494,51 @@ class AutoClickerGUI:
 
     def _on_close_to_tray_changed(self):
         self.save_config()
+
+    def save_preset(self):
+        name = self.preset_name_var.get().strip()
+        if not name:
+            return
+        config = {
+            "hotkey": self.hotkey_var.get(),
+            "mode": self.mode_var.get(),
+            "interval": self.interval_var.get(),
+            "target": self.target_var.get(),
+            "key": self.key_var.get(),
+            "max_clicks": self.max_clicks_var.get(),
+            "max_seconds": self.max_seconds_var.get(),
+            "random_enabled": self.random_enabled_var.get(),
+            "random_range": self.random_range_var.get()
+        }
+        self.preset_manager.save_preset(name, config)
+        self.preset_combo["values"] = self.preset_manager.get_preset_names()
+        self.selected_preset_var.set(name)
+        self.preset_name_var.set("")
+
+    def load_preset(self):
+        name = self.selected_preset_var.get()
+        if not name:
+            return
+        config = self.preset_manager.get_preset(name)
+        if config:
+            self.hotkey_var.set(config.get("hotkey", "F6"))
+            self.mode_var.set(config.get("mode", "toggle"))
+            self.interval_var.set(config.get("interval", 100))
+            self.target_var.set(config.get("target", "keyboard"))
+            self.key_var.set(config.get("key", "a"))
+            self.max_clicks_var.set(config.get("max_clicks", 0))
+            self.max_seconds_var.set(config.get("max_seconds", 0))
+            self.random_enabled_var.set(config.get("random_enabled", False))
+            self.random_range_var.set(config.get("random_range", 50))
+            self.save_config()
+
+    def delete_preset(self):
+        name = self.selected_preset_var.get()
+        if not name:
+            return
+        if self.preset_manager.delete_preset(name):
+            self.preset_combo["values"] = self.preset_manager.get_preset_names()
+            self.selected_preset_var.set("")
 
     def load_config(self):
         config = self.config_manager.load_config()
