@@ -35,9 +35,9 @@ def test_gui_toggle_clicking(gui):
     assert gui._running is False
     gui.toggle_clicking()
     assert gui._running is True
-    assert gui.start_button.cget("text") == "停止"
+    assert "停止" in gui.start_button.cget("text")
     assert "运行中" in gui.status_label.cget("text")
     gui.toggle_clicking()
     assert gui._running is False
-    assert gui.start_button.cget("text") == "开始"
+    assert "开始" in gui.start_button.cget("text")
     assert "停止" in gui.status_label.cget("text")

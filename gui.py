@@ -7,22 +7,32 @@ from clicker import Clicker
 
 
 class AutoClickerGUI:
-    BASE_WIDTH = 400
-    BASE_HEIGHT = 300
+    BASE_WIDTH = 420
+    BASE_HEIGHT = 340
     BASE_FONT_SIZE = 10
+
+    BG_COLOR = "#f0f0f0"
+    ACCENT_COLOR = "#4a90d9"
+    ACCENT_HOVER = "#357abd"
+    STOP_COLOR = "#e74c3c"
+    STOP_HOVER = "#c0392b"
+    RUNNING_COLOR = "#27ae60"
+    CARD_BG = "#ffffff"
+    TEXT_COLOR = "#333333"
+    LABEL_COLOR = "#555555"
 
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("连点器")
         self.root.geometry(f"{self.BASE_WIDTH}x{self.BASE_HEIGHT}")
-        self.root.minsize(250, 200)
+        self.root.minsize(320, 280)
+        self.root.configure(bg=self.BG_COLOR)
 
         self.config_manager = ConfigManager()
         self.hotkey_listener = HotkeyListener()
         self.clicker = Clicker()
         self._running = False
         self._scale = 1.0
-        self._widgets = []
 
         self.hotkey_var = tk.StringVar(value="F6")
         self.mode_var = tk.StringVar(value="toggle")
@@ -31,6 +41,7 @@ class AutoClickerGUI:
         self.key_var = tk.StringVar(value="a")
 
         self._init_fonts()
+        self._init_styles()
         self.create_widgets()
         self.load_config()
         self._start_hotkey_listener()
@@ -38,11 +49,42 @@ class AutoClickerGUI:
         self.root.bind("<Configure>", self._on_resize)
 
     def _init_fonts(self):
-        self.default_font = tkfont.nametofont("TkDefaultFont")
-        self.default_font.configure(size=self.BASE_FONT_SIZE)
-        self.entry_font = tkfont.Font(family=self.default_font.cget("family"), size=self.BASE_FONT_SIZE)
-        self.button_font = tkfont.Font(family=self.default_font.cget("family"), size=self.BASE_FONT_SIZE)
-        self.bold_font = tkfont.Font(family=self.default_font.cget("family"), size=self.BASE_FONT_SIZE, weight="bold")
+        base = tkfont.nametofont("TkDefaultFont")
+        self.font_title = tkfont.Font(family=base.cget("family"), size=max(12, self.BASE_FONT_SIZE + 2), weight="bold")
+        self.font_label = tkfont.Font(family=base.cget("family"), size=self.BASE_FONT_SIZE)
+        self.font_entry = tkfont.Font(family=base.cget("family"), size=self.BASE_FONT_SIZE)
+        self.font_button = tkfont.Font(family=base.cget("family"), size=self.BASE_FONT_SIZE, weight="bold")
+        self.font_status = tkfont.Font(family=base.cget("family"), size=self.BASE_FONT_SIZE, weight="bold")
+        self.font_small = tkfont.Font(family=base.cget("family"), size=max(8, self.BASE_FONT_SIZE - 1))
+
+    def _init_styles(self):
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        style.configure("Card.TFrame", background=self.CARD_BG, relief="flat")
+        style.configure("Card.TLabel", background=self.CARD_BG, foreground=self.TEXT_COLOR)
+        style.configure("Title.TLabel", background=self.BG_COLOR, foreground=self.TEXT_COLOR, font=self.font_title)
+        style.configure("Status.TLabel", background=self.CARD_BG, foreground=self.LABEL_COLOR, font=self.font_status)
+        style.configure("Running.TLabel", background=self.CARD_BG, foreground=self.RUNNING_COLOR, font=self.font_status)
+        style.configure("Hint.TLabel", background=self.CARD_BG, foreground="#999999", font=self.font_small)
+
+        style.configure("Accent.TButton", font=self.font_button, padding=(12, 6))
+        style.map("Accent.TButton",
+                   background=[("active", self.ACCENT_HOVER), ("!active", self.ACCENT_COLOR)],
+                   foreground=[("active", "white"), ("!active", "white")])
+
+        style.configure("Stop.TButton", font=self.font_button, padding=(12, 6))
+        style.map("Stop.TButton",
+                   background=[("active", self.STOP_HOVER), ("!active", self.STOP_COLOR)],
+                   foreground=[("active", "white"), ("!active", "white")])
+
+        style.configure("Set.TButton", font=self.font_label, padding=(6, 2))
+        style.map("Set.TButton",
+                   background=[("active", "#e0e0e0"), ("!active", "#e8e8e8")])
+
+        style.configure("TEntry", font=self.font_entry, padding=4)
+        style.configure("TCombobox", font=self.font_entry, padding=4)
+        style.configure("TSpinbox", font=self.font_entry, padding=4)
 
     def _on_resize(self, event):
         if event.widget != self.root:
@@ -51,57 +93,97 @@ class AutoClickerGUI:
         if abs(new_scale - self._scale) < 0.05:
             return
         self._scale = new_scale
-        new_size = max(8, int(self.BASE_FONT_SIZE * self._scale))
 
-        self.default_font.configure(size=new_size)
-        self.entry_font.configure(size=new_size)
-        self.button_font.configure(size=new_size)
-        self.bold_font.configure(size=new_size)
-
-        pad = max(4, int(10 * self._scale))
-        self.main_frame.configure(padding=f"{pad}")
+        sz = max(8, int(self.BASE_FONT_SIZE * self._scale))
+        self.font_title.configure(size=max(12, sz + 2))
+        self.font_label.configure(size=sz)
+        self.font_entry.configure(size=sz)
+        self.font_button.configure(size=sz)
+        self.font_status.configure(size=sz)
+        self.font_small.configure(size=max(8, sz - 1))
 
     def create_widgets(self):
-        self.main_frame = ttk.Frame(self.root, padding="10")
-        self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        self.root.rowconfigure(1, weight=1)
 
-        rows = [
-            ("启动热键:", self.hotkey_var, "Entry", "设置热键", self.set_hotkey),
-            ("启动模式:", self.mode_var, "Combobox", None, None),
-            ("点击间隔(ms):", self.interval_var, "Spinbox", None, None),
-            ("模拟目标:", self.target_var, "Combobox", None, None),
-            ("模拟按键:", self.key_var, "Entry", "设置按键", self.set_key),
-        ]
+        header = ttk.Frame(self.root, style="Card.TFrame")
+        header.grid(row=0, column=0, sticky=tk.W + tk.E, padx=12, pady=(12, 0))
+        header.columnconfigure(0, weight=1)
 
-        for i, (label_text, var, widget_type, btn_text, btn_cmd) in enumerate(rows):
-            lbl = ttk.Label(self.main_frame, text=label_text, font=self.default_font)
-            lbl.grid(row=i, column=0, sticky=tk.W, pady=2)
-            self._widgets.append(lbl)
+        ttk.Label(header, text="⚡ 连点器", style="Title.TLabel").grid(row=0, column=0, sticky=tk.W, pady=(0, 2))
 
-            if widget_type == "Entry":
-                w = ttk.Entry(self.main_frame, textvariable=var, width=12, font=self.entry_font)
-            elif widget_type == "Combobox":
-                values = ["toggle", "hold"] if label_text == "启动模式:" else ["keyboard", "mouse"]
-                w = ttk.Combobox(self.main_frame, textvariable=var, values=values, state="readonly", font=self.entry_font)
-            elif widget_type == "Spinbox":
-                w = ttk.Spinbox(self.main_frame, from_=1, to=1000, textvariable=var, width=12, font=self.entry_font)
-            w.grid(row=i, column=1, sticky=tk.W, pady=2)
-            self._widgets.append(w)
+        self.status_label = ttk.Label(header, text="● 已停止", style="Status.TLabel")
+        self.status_label.grid(row=1, column=0, sticky=tk.W)
 
-            if btn_text:
-                btn = ttk.Button(self.main_frame, text=btn_text, command=btn_cmd)
-                btn.grid(row=i, column=2, sticky=tk.W, padx=(5, 0), pady=2)
-                self._widgets.append(btn)
+        body = tk.Frame(self.root, bg=self.BG_COLOR)
+        body.grid(row=1, column=0, sticky=tk.W + tk.E + tk.N + tk.S, padx=12, pady=8)
+        body.columnconfigure(0, weight=1)
 
-        self.start_button = ttk.Button(self.main_frame, text="开始", command=self.toggle_clicking)
-        self.start_button.grid(row=5, column=0, columnspan=3, sticky=tk.W + tk.E, pady=(8, 2))
-        self._widgets.append(self.start_button)
+        self._create_hotkey_card(body, row=0)
+        self._create_settings_card(body, row=1)
+        self._create_action_card(body, row=2)
 
-        self.status_label = ttk.Label(self.main_frame, text="状态: 停止", font=self.bold_font)
-        self.status_label.grid(row=6, column=0, columnspan=3, sticky=tk.W, pady=2)
-        self._widgets.append(self.status_label)
+    def _create_hotkey_card(self, parent, row):
+        card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
+        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.columnconfigure(1, weight=1)
+
+        ttk.Label(card, text="启动热键", style="Card.TLabel", font=self.font_button).grid(
+            row=0, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(8, 4))
+
+        ttk.Label(card, text="按键:", style="Card.TLabel").grid(row=1, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        self.hotkey_entry = ttk.Entry(card, textvariable=self.hotkey_var, width=12, justify="center")
+        self.hotkey_entry.grid(row=1, column=1, sticky=tk.W, pady=2)
+        ttk.Button(card, text="设置", style="Set.TButton", command=self.set_hotkey).grid(
+            row=1, column=2, sticky=tk.W, padx=(6, 10), pady=2)
+
+        ttk.Label(card, text="模式:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Combobox(card, textvariable=self.mode_var, values=["toggle", "hold"],
+                     state="readonly", width=10).grid(row=2, column=1, sticky=tk.W, pady=2)
+
+        ttk.Label(card, text="点按切换 / 长按生效", style="Hint.TLabel").grid(
+            row=3, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(0, 8))
+
+    def _create_settings_card(self, parent, row):
+        card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
+        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
+        card.columnconfigure(1, weight=1)
+
+        ttk.Label(card, text="模拟设置", style="Card.TLabel", font=self.font_button).grid(
+            row=0, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(8, 4))
+
+        ttk.Label(card, text="目标:", style="Card.TLabel").grid(row=1, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Combobox(card, textvariable=self.target_var, values=["keyboard", "mouse"],
+                     state="readonly", width=10).grid(row=1, column=1, sticky=tk.W, pady=2)
+
+        ttk.Label(card, text="按键:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        self.key_entry = ttk.Entry(card, textvariable=self.key_var, width=12, justify="center")
+        self.key_entry.grid(row=2, column=1, sticky=tk.W, pady=2)
+        ttk.Button(card, text="设置", style="Set.TButton", command=self.set_key).grid(
+            row=2, column=2, sticky=tk.W, padx=(6, 10), pady=2)
+
+        ttk.Label(card, text="间隔:", style="Card.TLabel").grid(row=3, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Spinbox(card, from_=1, to=1000, textvariable=self.interval_var, width=10).grid(
+            row=3, column=1, sticky=tk.W, pady=2)
+        ttk.Label(card, text="毫秒 (1-1000)", style="Hint.TLabel").grid(
+            row=3, column=2, sticky=tk.W, padx=(6, 10), pady=2)
+
+    def _create_action_card(self, parent, row):
+        card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
+        card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 4))
+        card.columnconfigure(0, weight=1)
+
+        self.start_button = tk.Button(
+            card, text="▶  开始", font=self.font_button,
+            bg=self.ACCENT_COLOR, fg="white", activebackground=self.ACCENT_HOVER,
+            activeforeground="white", relief="flat", cursor="hand2",
+            command=self.toggle_clicking, height=2
+        )
+        self.start_button.grid(row=0, column=0, sticky=tk.W + tk.E, padx=10, pady=10)
+        self.start_button.bind("<Enter>", lambda e: self.start_button.configure(
+            bg=self.ACCENT_HOVER if not self._running else self.STOP_HOVER))
+        self.start_button.bind("<Leave>", lambda e: self.start_button.configure(
+            bg=self.ACCENT_COLOR if not self._running else self.STOP_COLOR))
 
     def load_config(self):
         config = self.config_manager.load_config()
@@ -130,19 +212,22 @@ class AutoClickerGUI:
         self.root.after(0, self.toggle_clicking)
 
     def set_hotkey(self):
-        self.status_label.config(text="状态: 请按下新热键...")
+        self.status_label.configure(text="● 请按下新热键...", style="Status.TLabel")
+        self.hotkey_entry.configure(foreground="#999999")
         self.root.bind("<KeyPress>", self.on_hotkey_pressed)
 
     def on_hotkey_pressed(self, event):
         new_hotkey = event.keysym
         self.hotkey_var.set(new_hotkey)
         self.root.unbind("<KeyPress>")
-        self.status_label.config(text="状态: 停止")
+        self.hotkey_entry.configure(foreground=self.TEXT_COLOR)
+        self._update_status_stopped()
         self.save_config()
         self.hotkey_listener.set_hotkey(new_hotkey)
 
     def set_key(self):
-        self.status_label.config(text="状态: 请按下新按键...")
+        self.status_label.configure(text="● 请按下新按键...", style="Status.TLabel")
+        self.key_entry.configure(foreground="#999999")
         target = self.target_var.get()
         if target == "keyboard":
             self.root.bind("<KeyPress>", self.on_key_pressed)
@@ -154,7 +239,8 @@ class AutoClickerGUI:
     def on_key_pressed(self, event):
         self.key_var.set(event.keysym)
         self.root.unbind("<KeyPress>")
-        self.status_label.config(text="状态: 停止")
+        self.key_entry.configure(foreground=self.TEXT_COLOR)
+        self._update_status_stopped()
         self.save_config()
 
     def on_mouse_button_pressed(self, event):
@@ -164,15 +250,26 @@ class AutoClickerGUI:
         self.root.unbind("<ButtonPress-1>")
         self.root.unbind("<ButtonPress-2>")
         self.root.unbind("<ButtonPress-3>")
-        self.status_label.config(text="状态: 停止")
+        self.key_entry.configure(foreground=self.TEXT_COLOR)
+        self._update_status_stopped()
         self.save_config()
+
+    def _update_status_stopped(self):
+        self.status_label.configure(text="● 已停止", style="Status.TLabel")
+
+    def _update_status_running(self):
+        self.status_label.configure(text="● 运行中", style="Running.TLabel")
 
     def toggle_clicking(self):
         if self._running:
             self.clicker.stop_clicking()
             self._running = False
-            self.start_button.config(text="开始")
-            self.status_label.config(text="状态: 停止")
+            self.start_button.configure(text="▶  开始", bg=self.ACCENT_COLOR)
+            self.start_button.unbind("<Enter>")
+            self.start_button.unbind("<Leave>")
+            self.start_button.bind("<Enter>", lambda e: self.start_button.configure(bg=self.ACCENT_HOVER))
+            self.start_button.bind("<Leave>", lambda e: self.start_button.configure(bg=self.ACCENT_COLOR))
+            self._update_status_stopped()
         else:
             self.save_config()
             self.hotkey_listener.set_hotkey(self.hotkey_var.get())
@@ -182,8 +279,12 @@ class AutoClickerGUI:
             self.clicker.set_interval(self.interval_var.get())
             self.clicker.start_clicking()
             self._running = True
-            self.start_button.config(text="停止")
-            self.status_label.config(text="状态: 运行中")
+            self.start_button.configure(text="■  停止", bg=self.STOP_COLOR)
+            self.start_button.unbind("<Enter>")
+            self.start_button.unbind("<Leave>")
+            self.start_button.bind("<Enter>", lambda e: self.start_button.configure(bg=self.STOP_HOVER))
+            self.start_button.bind("<Leave>", lambda e: self.start_button.configure(bg=self.STOP_COLOR))
+            self._update_status_running()
 
     def run(self):
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
