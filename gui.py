@@ -56,6 +56,8 @@ class AutoClickerGUI:
         self.click_count_var = tk.StringVar(value="0")
         self.max_seconds_var = tk.IntVar(value=0)
         self.elapsed_time_var = tk.StringVar(value="00:00")
+        self.random_enabled_var = tk.BooleanVar(value=False)
+        self.random_range_var = tk.IntVar(value=50)
 
         self._init_fonts()
         self._init_styles()
@@ -265,6 +267,13 @@ class AutoClickerGUI:
         ttk.Label(card, text="毫秒 (1-1000)", style="Hint.TLabel").grid(
             row=3, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
+        ttk.Checkbutton(card, text="随机间隔", variable=self.random_enabled_var,
+                        style="TCheckbutton").grid(row=4, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Spinbox(card, from_=0, to=500, textvariable=self.random_range_var, width=10).grid(
+            row=4, column=1, sticky=tk.W, pady=2)
+        ttk.Label(card, text="±毫秒 (0-500)", style="Hint.TLabel").grid(
+            row=4, column=2, sticky=tk.W, padx=(6, 10), pady=2)
+
     def _create_counter_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
         card.grid(row=row, column=0, sticky=tk.W + tk.E, pady=(0, 6))
@@ -463,6 +472,8 @@ class AutoClickerGUI:
         self.close_to_tray_var.set(config.get("close_to_tray", True))
         self.max_clicks_var.set(config.get("max_clicks", 0))
         self.max_seconds_var.set(config.get("max_seconds", 0))
+        self.random_enabled_var.set(config.get("random_enabled", False))
+        self.random_range_var.set(config.get("random_range", 50))
 
     def save_config(self):
         config = {
@@ -473,7 +484,9 @@ class AutoClickerGUI:
             "key": self.key_var.get(),
             "close_to_tray": self.close_to_tray_var.get(),
             "max_clicks": self.max_clicks_var.get(),
-            "max_seconds": self.max_seconds_var.get()
+            "max_seconds": self.max_seconds_var.get(),
+            "random_enabled": self.random_enabled_var.get(),
+            "random_range": self.random_range_var.get()
         }
         self.config_manager.save_config(config)
 
@@ -554,6 +567,7 @@ class AutoClickerGUI:
             self.clicker.set_interval(self.interval_var.get())
             self.clicker.set_max_clicks(self.max_clicks_var.get())
             self.clicker.set_max_seconds(self.max_seconds_var.get())
+            self.clicker.set_random_interval(self.random_enabled_var.get(), self.random_range_var.get())
             self.clicker.start_clicking()
             self._running = True
             self.start_button.configure(text="■  停止", bg=self.STOP_COLOR)

@@ -1,4 +1,5 @@
 import time
+import random
 import threading
 from pynput import keyboard, mouse
 
@@ -61,6 +62,8 @@ class Clicker:
         self.max_clicks = 0
         self.max_seconds = 0
         self._start_time = 0
+        self.random_enabled = False
+        self.random_range = 50
         self.on_click = None
         self.on_max_reached = None
         self.on_timeout = None
@@ -81,6 +84,10 @@ class Clicker:
 
     def set_max_seconds(self, max_seconds):
         self.max_seconds = max(0, int(max_seconds))
+
+    def set_random_interval(self, enabled, range_ms=50):
+        self.random_enabled = enabled
+        self.random_range = max(0, min(500, int(range_ms)))
 
     def reset_counter(self):
         self.click_count = 0
@@ -115,6 +122,13 @@ class Clicker:
             return self.MODIFIER_MAP[key_lower]
         return key_name
 
+    def _get_sleep_time(self):
+        if self.random_enabled and self.random_range > 0:
+            offset = random.randint(-self.random_range, self.random_range)
+            sleep_time = self.interval + offset
+            return max(1, sleep_time) / 1000.0
+        return self.interval / 1000.0
+
     def _click_loop(self):
         while self.is_clicking:
             if self.target == "keyboard":
@@ -143,4 +157,4 @@ class Clicker:
                         self.on_timeout()
                     break
 
-            time.sleep(self.interval / 1000.0)
+            time.sleep(self._get_sleep_time())
