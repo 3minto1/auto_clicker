@@ -5,9 +5,13 @@ from ctypes import wintypes
 
 IS_WINDOWS = sys.platform == "win32"
 
+user32 = None
 
 if IS_WINDOWS:
-    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    try:
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+    except Exception:
+        user32 = None
 
     ULONG_PTR = wintypes.WPARAM
 
@@ -185,4 +189,9 @@ class WindowsInput:
 
 
 def is_vk_down(vk):
-    return bool(user32.GetAsyncKeyState(vk) & 0x8000)
+    if user32 is None:
+        return False
+    try:
+        return bool(user32.GetAsyncKeyState(vk) & 0x8000)
+    except Exception:
+        return False

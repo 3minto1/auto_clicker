@@ -53,16 +53,19 @@ class HotkeyListener:
 
     def _poll_hotkey(self):
         while self.is_listening:
-            pressed = bool(self._hotkey_vks) and all(is_vk_down(vk) for vk in self._hotkey_vks)
-            if pressed and not self._hotkey_pressed:
-                self._hotkey_pressed = True
-                if self.callback:
-                    self.callback()
-            elif not pressed and self._hotkey_pressed:
-                self._hotkey_pressed = False
-                if self.mode == "hold" and self.callback:
-                    self.callback()
-            time.sleep(0.005)
+            try:
+                pressed = bool(self._hotkey_vks) and all(is_vk_down(vk) for vk in self._hotkey_vks)
+                if pressed and not self._hotkey_pressed:
+                    self._hotkey_pressed = True
+                    if self.callback:
+                        self.callback()
+                elif not pressed and self._hotkey_pressed:
+                    self._hotkey_pressed = False
+                    if self.mode == "hold" and self.callback:
+                        self.callback()
+            except Exception:
+                pass
+            time.sleep(0.01)
 
     def _on_press(self, key):
         if not self.is_listening:
