@@ -58,6 +58,7 @@ class Clicker:
         self.key = "a"
         self.interval = 100
         self.is_clicking = False
+        self.is_key_down = False
         self.click_thread = None
         self.controller = None
         self.click_count = 0
@@ -118,9 +119,27 @@ class Clicker:
 
     def stop_clicking(self):
         self.is_clicking = False
+        if self.is_key_down:
+            self._release_key()
         if self.click_thread and self.click_thread is not threading.current_thread():
             self.click_thread.join()
         self.click_thread = None
+
+    def start_hold(self):
+        if self.is_key_down:
+            return
+        if IS_WINDOWS:
+            self.controller = WindowsInput()
+        elif self.target == "keyboard":
+            self.controller = keyboard.Controller()
+        else:
+            self.controller = mouse.Controller()
+        self._press_key()
+
+    def stop_hold(self):
+        if not self.is_key_down:
+            return
+        self._release_key()
 
     def _resolve_key(self, key_name):
         key_lower = key_name.lower()
@@ -137,6 +156,43 @@ class Clicker:
 
     def _get_press_time(self):
         return min(0.01, max(0.001, self.interval / 2000.0))
+
+    def _press_key(self):
+        try:
+            if IS_WINDOWS:
+                if self.target == "keyboard":
+                    self.controller.key_down(self.key)
+                else:
+                    self.controller.mouse_down(self.key)
+            else:
+                if self.target == "keyboard":
+                    key = self._resolve_key(self.key)
+                    self.controller.press(key)
+                else:
+                    button = self.MOUSE_BUTTON_MAP.get(self.key.lower(), mouse.Button.left)
+                    self.controller.press(button)
+            self.is_key_down = True
+        except Exception as exc:
+            if self.on_error:
+                self.on_error(str(exc))
+
+    def _release_key(self):
+        try:
+            if IS_WINDOWS:
+                if self.target == "keyboard":
+                    self.controller.key_up(self.key)
+                else:
+                    self.controller.mouse_up(self.key)
+            else:
+                if self.target == "keyboard":
+                    key = self._resolve_key(self.key)
+                    self.controller.release(key)
+                else:
+                    button = self.MOUSE_BUTTON_MAP.get(self.key.lower(), mouse.Button.left)
+                    self.controller.release(button)
+            self.is_key_down = False
+        except Exception:
+            self.is_key_down = False
 
     def _emit_once(self):
         press_time = self._get_press_time()

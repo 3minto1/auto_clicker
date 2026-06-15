@@ -47,7 +47,8 @@ class AutoClickerGUI:
         self._timer_job = None
 
         self.hotkey_var = tk.StringVar(value="F6")
-        self.mode_var = tk.StringVar(value="toggle")
+        self.hotkey_mode_var = tk.StringVar(value="toggle")
+        self.action_mode_var = tk.StringVar(value="click")
         self.interval_var = tk.IntVar(value=100)
         self.target_var = tk.StringVar(value="keyboard")
         self.key_var = tk.StringVar(value="a")
@@ -244,12 +245,17 @@ class AutoClickerGUI:
         ttk.Button(card, text="设置", style="Set.TButton", command=self.set_hotkey).grid(
             row=1, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
-        ttk.Label(card, text="模式:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
-        ttk.Combobox(card, textvariable=self.mode_var, values=["toggle", "hold"],
+        ttk.Label(card, text="触发:", style="Card.TLabel").grid(row=2, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Combobox(card, textvariable=self.hotkey_mode_var, values=["toggle", "hold"],
                      state="readonly", width=8).grid(row=2, column=1, sticky=tk.W, pady=2)
-
-        ttk.Label(card, text="点按/长按", style="Hint.TLabel").grid(
+        ttk.Label(card, text="切换/按住", style="Hint.TLabel").grid(
             row=2, column=2, sticky=tk.W, padx=(6, 10), pady=2)
+
+        ttk.Label(card, text="功能:", style="Card.TLabel").grid(row=3, column=0, sticky=tk.W, padx=(10, 4), pady=2)
+        ttk.Combobox(card, textvariable=self.action_mode_var, values=["click", "hold"],
+                     state="readonly", width=8).grid(row=3, column=1, sticky=tk.W, pady=2)
+        ttk.Label(card, text="连点/长按", style="Hint.TLabel").grid(
+            row=3, column=2, sticky=tk.W, padx=(6, 10), pady=2)
 
     def _create_settings_card(self, parent, row):
         card = tk.Frame(parent, bg=self.CARD_BG, highlightbackground="#e0e0e0", highlightthickness=1)
@@ -501,7 +507,8 @@ class AutoClickerGUI:
             return
         config = {
             "hotkey": self.hotkey_var.get(),
-            "mode": self.mode_var.get(),
+            "hotkey_mode": self.hotkey_mode_var.get(),
+            "action_mode": self.action_mode_var.get(),
             "interval": self.interval_var.get(),
             "target": self.target_var.get(),
             "key": self.key_var.get(),
@@ -522,7 +529,8 @@ class AutoClickerGUI:
         config = self.preset_manager.get_preset(name)
         if config:
             self.hotkey_var.set(config.get("hotkey", "F6"))
-            self.mode_var.set(config.get("mode", "toggle"))
+            self.hotkey_mode_var.set(config.get("hotkey_mode", "toggle"))
+            self.action_mode_var.set(config.get("action_mode", "click"))
             self.interval_var.set(config.get("interval", 100))
             self.target_var.set(config.get("target", "keyboard"))
             self.key_var.set(config.get("key", "a"))
@@ -543,7 +551,8 @@ class AutoClickerGUI:
     def load_config(self):
         config = self.config_manager.load_config()
         self.hotkey_var.set(config.get("hotkey", "F6"))
-        self.mode_var.set(config.get("mode", "toggle"))
+        self.hotkey_mode_var.set(config.get("hotkey_mode", "toggle"))
+        self.action_mode_var.set(config.get("action_mode", "click"))
         self.interval_var.set(config.get("interval", 100))
         self.target_var.set(config.get("target", "keyboard"))
         self.key_var.set(config.get("key", "a"))
@@ -556,7 +565,8 @@ class AutoClickerGUI:
     def save_config(self):
         config = {
             "hotkey": self.hotkey_var.get(),
-            "mode": self.mode_var.get(),
+            "hotkey_mode": self.hotkey_mode_var.get(),
+            "action_mode": self.action_mode_var.get(),
             "interval": self.interval_var.get(),
             "target": self.target_var.get(),
             "key": self.key_var.get(),
@@ -570,7 +580,7 @@ class AutoClickerGUI:
 
     def _start_hotkey_listener(self):
         self.hotkey_listener.set_hotkey(self.hotkey_var.get())
-        self.hotkey_listener.set_mode(self.mode_var.get())
+        self.hotkey_listener.set_mode(self.hotkey_mode_var.get())
         self.hotkey_listener.start_listening(self._on_hotkey_triggered)
 
     def _on_hotkey_triggered(self):
@@ -627,34 +637,51 @@ class AutoClickerGUI:
 
     def toggle_clicking(self):
         if self._running:
-            self.clicker.stop_clicking()
-            self._running = False
-            self._stop_timer()
-            self.start_button.configure(text="▶  开始", bg=self.ACCENT_COLOR)
-            self.start_button.unbind("<Enter>")
-            self.start_button.unbind("<Leave>")
-            self.start_button.bind("<Enter>", lambda e: self.start_button.configure(bg=self.ACCENT_HOVER))
-            self.start_button.bind("<Leave>", lambda e: self.start_button.configure(bg=self.ACCENT_COLOR))
-            self._update_status_stopped()
+            self._stop_action()
         else:
-            self.save_config()
-            self.hotkey_listener.set_hotkey(self.hotkey_var.get())
-            self.hotkey_listener.set_mode(self.mode_var.get())
-            self.clicker.set_target(self.target_var.get())
-            self.clicker.set_key(self.key_var.get())
-            self.clicker.set_interval(self.interval_var.get())
-            self.clicker.set_max_clicks(self.max_clicks_var.get())
-            self.clicker.set_max_seconds(self.max_seconds_var.get())
-            self.clicker.set_random_interval(self.random_enabled_var.get(), self.random_range_var.get())
+            self._start_action()
+
+    def _start_action(self):
+        self.save_config()
+        self.hotkey_listener.set_hotkey(self.hotkey_var.get())
+        self.hotkey_listener.set_mode(self.hotkey_mode_var.get())
+
+        action_mode = self.action_mode_var.get()
+        self.clicker.set_target(self.target_var.get())
+        self.clicker.set_key(self.key_var.get())
+        self.clicker.set_interval(self.interval_var.get())
+        self.clicker.set_max_clicks(self.max_clicks_var.get())
+        self.clicker.set_max_seconds(self.max_seconds_var.get())
+        self.clicker.set_random_interval(self.random_enabled_var.get(), self.random_range_var.get())
+
+        if action_mode == "hold":
+            self.clicker.start_hold()
+        else:
             self.clicker.start_clicking()
-            self._running = True
-            self.start_button.configure(text="■  停止", bg=self.STOP_COLOR)
-            self.start_button.unbind("<Enter>")
-            self.start_button.unbind("<Leave>")
-            self.start_button.bind("<Enter>", lambda e: self.start_button.configure(bg=self.STOP_HOVER))
-            self.start_button.bind("<Leave>", lambda e: self.start_button.configure(bg=self.STOP_COLOR))
-            self._update_status_running()
-            self._start_timer()
+
+        self._running = True
+        self.start_button.configure(text="■  停止", bg=self.STOP_COLOR)
+        self.start_button.unbind("<Enter>")
+        self.start_button.unbind("<Leave>")
+        self.start_button.bind("<Enter>", lambda e: self.start_button.configure(bg=self.STOP_HOVER))
+        self.start_button.bind("<Leave>", lambda e: self.start_button.configure(bg=self.STOP_COLOR))
+        self._update_status_running()
+        self._start_timer()
+
+    def _stop_action(self):
+        action_mode = self.action_mode_var.get()
+        if action_mode == "hold":
+            self.clicker.stop_hold()
+        else:
+            self.clicker.stop_clicking()
+        self._running = False
+        self._stop_timer()
+        self.start_button.configure(text="▶  开始", bg=self.ACCENT_COLOR)
+        self.start_button.unbind("<Enter>")
+        self.start_button.unbind("<Leave>")
+        self.start_button.bind("<Enter>", lambda e: self.start_button.configure(bg=self.ACCENT_HOVER))
+        self.start_button.bind("<Leave>", lambda e: self.start_button.configure(bg=self.ACCENT_COLOR))
+        self._update_status_stopped()
 
     def _create_tray_icon(self):
         image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))

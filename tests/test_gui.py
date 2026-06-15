@@ -12,14 +12,16 @@ def gui():
 def test_gui_initialization(gui):
     assert gui.root.title() == "连点器"
     assert gui.hotkey_var.get() in ["F6", "F8"]
-    assert gui.mode_var.get() == "toggle"
+    assert gui.hotkey_mode_var.get() == "toggle"
+    assert gui.action_mode_var.get() == "click"
     assert gui.interval_var.get() == 100
 
 
 def test_gui_load_config(gui):
     config = gui.config_manager.load_config()
     assert "hotkey" in config
-    assert "mode" in config
+    assert "hotkey_mode" in config
+    assert "action_mode" in config
 
 
 def test_gui_save_config(gui):
